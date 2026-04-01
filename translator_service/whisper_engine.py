@@ -73,8 +73,16 @@ def transcribe(
     if initial_prompt:
         kwargs["initial_prompt"] = initial_prompt
 
+    import concurrent.futures
     with _inference_lock:
-        result = mlx_w.transcribe(audio, **kwargs)
+        # Timeout: if Whisper takes >8s on a 3s chunk, it's hallucinating
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(mlx_w.transcribe, audio, **kwargs)
+            try:
+                result = future.result(timeout=8)
+            except concurrent.futures.TimeoutError:
+                logging.getLogger("hermes.whisper").warning("Whisper timed out (hallucination loop)")
+                return {"text": "", "language": language or ""}
 
     text = (result.get("text") or "").strip()
     detected_lang = result.get("language", language or "")
