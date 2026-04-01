@@ -3,6 +3,7 @@ set -e
 
 cd "$(dirname "$0")"
 PROJECT_DIR="$(pwd)"
+APP_BUNDLE="$PROJECT_DIR/Hermes.app"
 
 echo "=== Hermes Installer ==="
 
@@ -32,9 +33,9 @@ echo "Installing Python dependencies..."
 MACOS_VER=$(sw_vers -productVersion | cut -d. -f1).0
 echo "Building for macOS $MACOS_VER..."
 
-# 5. Build Swift binary
+# 5. Compile Swift binary
 echo "Compiling Hermes..."
-swiftc -o "$PROJECT_DIR/hermes-app" \
+swiftc -o /tmp/hermes-build \
     -target arm64-apple-macos${MACOS_VER} \
     -framework ScreenCaptureKit \
     -framework AVFoundation \
@@ -42,6 +43,45 @@ swiftc -o "$PROJECT_DIR/hermes-app" \
     -framework QuartzCore \
     "$PROJECT_DIR"/Hermes/*.swift
 
+# 6. Build .app bundle
+echo "Creating Hermes.app bundle..."
+rm -rf "$APP_BUNDLE"
+mkdir -p "$APP_BUNDLE/Contents/MacOS"
+mkdir -p "$APP_BUNDLE/Contents/Resources"
+
+mv /tmp/hermes-build "$APP_BUNDLE/Contents/MacOS/Hermes"
+cp "$PROJECT_DIR/Hermes/Info.plist" "$APP_BUNDLE/Contents/"
+cp "$PROJECT_DIR/Hermes/Hermes.entitlements" "$APP_BUNDLE/Contents/"
+cp -r "$PROJECT_DIR/translator_service" "$APP_BUNDLE/Contents/Resources/translator_service"
+
+# 7. Convert SVG icon to icns (if sips available)
+if [ -f "$PROJECT_DIR/static/icon.svg" ]; then
+    ICONSET_DIR=$(mktemp -d)/Hermes.iconset
+    mkdir -p "$ICONSET_DIR"
+
+    # Render SVG to PNG at required sizes using sips via a temp PNG
+    # sips can't read SVG directly, so we use qlmanage for the conversion
+    qlmanage -t -s 1024 -o /tmp "$PROJECT_DIR/static/icon.svg" 2>/dev/null || true
+    if [ -f "/tmp/icon.svg.png" ]; then
+        for size in 16 32 64 128 256 512; do
+            sips -z $size $size "/tmp/icon.svg.png" --out "$ICONSET_DIR/icon_${size}x${size}.png" 2>/dev/null
+            double=$((size * 2))
+            sips -z $double $double "/tmp/icon.svg.png" --out "$ICONSET_DIR/icon_${size}x${size}@2x.png" 2>/dev/null
+        done
+        iconutil -c icns "$ICONSET_DIR" -o "$APP_BUNDLE/Contents/Resources/AppIcon.icns" 2>/dev/null && \
+            echo "App icon set." || echo "Warning: icon conversion failed, using default icon."
+        rm -f /tmp/icon.svg.png
+    else
+        echo "Warning: could not render SVG, using default icon."
+    fi
+    rm -rf "$(dirname "$ICONSET_DIR")"
+fi
+
+# 8. Sign with entitlements (ad-hoc)
+codesign --force --sign - --entitlements "$PROJECT_DIR/Hermes/Hermes.entitlements" "$APP_BUNDLE" 2>/dev/null && \
+    echo "Code signed with entitlements." || echo "Warning: codesign failed, ScreenCaptureKit may not work."
+
 echo ""
 echo "=== Done ==="
-echo "Run with: $PROJECT_DIR/hermes-app"
+echo "Hermes.app is ready. Open it with:"
+echo "  open $APP_BUNDLE"
