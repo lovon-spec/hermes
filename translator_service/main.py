@@ -109,6 +109,7 @@ async def translate(request: Request) -> JSONResponse:
         )
 
     pcm_bytes = await request.body()
+    logger.warning(f"Received {len(pcm_bytes)} bytes")
 
     if len(pcm_bytes) < _MIN_AUDIO_BYTES:
         return JSONResponse({
@@ -151,4 +152,4 @@ if __name__ == "__main__":
     import uvicorn
 
     threading.Thread(target=_watch_parent, daemon=True).start()
-    uvicorn.run(app, host="127.0.0.1", port=5005, log_level="warning")
+    uvicorn.run(app, host="127.0.0.1", port=5005, log_level="info")
