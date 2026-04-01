@@ -46,11 +46,14 @@ def _chunk_has_speech(audio: np.ndarray, threshold: float = 0.35) -> bool:
     import torch
     model, _ = _get_vad()
     tensor = torch.from_numpy(audio).float()
+    # Sample 3 evenly-spaced windows instead of scanning every 512 samples
     window = 512
-    for start in range(0, len(tensor), window):
+    length = len(tensor)
+    if length < window:
+        return False
+    positions = [0, length // 2, length - window]
+    for start in positions:
         segment = tensor[start : start + window]
-        if len(segment) < window:
-            segment = torch.nn.functional.pad(segment, (0, window - len(segment)))
         if model(segment, _SAMPLE_RATE).item() > threshold:
             return True
     return False
