@@ -65,19 +65,9 @@ async def health() -> JSONResponse:
 
 
 # ── Translate ──────────────────────────────────────────────────────────
-_busy = False  # simple flag to drop requests when already processing
+_translate_lock = threading.Lock()
 
 def _process_audio(pcm_bytes: bytes) -> dict:
-    """Synchronous work: Whisper STT then NLLB translation."""
-    global _busy
-    _busy = True
-    try:
-        return _do_process(pcm_bytes)
-    finally:
-        _busy = False
-
-
-def _do_process(pcm_bytes: bytes) -> dict:
     t0 = time.perf_counter()
 
     stt = whisper_engine.transcribe(pcm_bytes, language=None)
@@ -120,8 +110,9 @@ async def translate(request: Request) -> JSONResponse:
             status_code=503,
         )
 
-    # Drop request if already processing — prevents queue buildup
-    if _busy:
+    pcm_bytes = await request.body()
+
+    if len(pcm_bytes) < _MIN_AUDIO_BYTES:
         return JSONResponse({
             "translation": "",
             "source_lang": "",
@@ -130,9 +121,8 @@ async def translate(request: Request) -> JSONResponse:
             "skipped": True,
         })
 
-    pcm_bytes = await request.body()
-
-    if len(pcm_bytes) < _MIN_AUDIO_BYTES:
+    # Drop request if already processing — non-blocking trylock
+    if not _translate_lock.acquire(blocking=False):
         return JSONResponse({
             "translation": "",
             "source_lang": "",
@@ -151,6 +141,8 @@ async def translate(request: Request) -> JSONResponse:
             {"error": str(exc)},
             status_code=500,
         )
+    finally:
+        _translate_lock.release()
 
 
 # ── Parent watchdog ───────────────────────────────────────────────────
