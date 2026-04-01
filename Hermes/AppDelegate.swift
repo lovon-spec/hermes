@@ -28,10 +28,32 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - App Lifecycle
 
+    private let logFile = "/tmp/hermes-debug.log"
+
+    private func log(_ message: String) {
+        let line = "\(Date()): \(message)\n"
+        if let data = line.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: logFile) {
+                if let handle = FileHandle(forWritingAtPath: logFile) {
+                    handle.seekToEndOfFile()
+                    handle.write(data)
+                    handle.closeFile()
+                }
+            } else {
+                FileManager.default.createFile(atPath: logFile, contents: data)
+            }
+        }
+        print(message)
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        log("applicationDidFinishLaunching called")
         setupMenuBar()
+        log("menu bar set up")
         setupOverlayWindow()
+        log("overlay window set up")
         startPythonService()
+        log("startPythonService called")
     }
 
     func applicationWillTerminate(_ notification: Notification) {
