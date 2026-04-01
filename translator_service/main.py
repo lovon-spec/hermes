@@ -163,11 +163,17 @@ def _watch_parent() -> None:
     ppid = os.getppid()
     while True:
         time.sleep(2)
+        current_ppid = os.getppid()
+        # If reparented to launchd (PID 1) or original parent is gone, exit
+        if current_ppid == 1 or current_ppid != ppid:
+            logger.info("Parent gone (ppid changed %d -> %d), shutting down.", ppid, current_ppid)
+            os._exit(0)  # hard exit, don't wait for stuck GPU ops
+            break
         try:
-            os.kill(ppid, 0)  # check if parent is alive
+            os.kill(ppid, 0)
         except OSError:
             logger.info("Parent process gone, shutting down.")
-            os.kill(os.getpid(), signal.SIGTERM)
+            os._exit(0)
             break
 
 

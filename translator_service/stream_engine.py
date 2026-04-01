@@ -23,7 +23,7 @@ logger = logging.getLogger("hermes.stream")
 
 # ── Constants ────────────────────────────────────────────────────────────
 _SAMPLE_RATE = 16_000
-_MAX_BUFFER_SECONDS = 30
+_MAX_BUFFER_SECONDS = 10
 _MAX_BUFFER_SAMPLES = _SAMPLE_RATE * _MAX_BUFFER_SECONDS
 _PROMPT_TAIL_CHARS = 200  # trailing chars of confirmed text used as initial_prompt
 
