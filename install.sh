@@ -41,6 +41,7 @@ swiftc -o /tmp/hermes-build \
     -framework AVFoundation \
     -framework Cocoa \
     -framework QuartzCore \
+    -framework CoreAudio \
     "$PROJECT_DIR"/Hermes/*.swift
 
 # 6. Build .app bundle

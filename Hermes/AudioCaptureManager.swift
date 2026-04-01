@@ -2,6 +2,7 @@ import Foundation
 import ScreenCaptureKit
 import AVFoundation
 import CoreMedia
+import CoreAudio
 
 /// Callback type: receives raw 16kHz mono PCM bytes ready to send to the translation service
 typealias AudioChunkCallback = (Data) -> Void
@@ -88,6 +89,37 @@ class AudioCaptureManager: NSObject {
         stream = newStream
         isCapturing = true
         log("Capture started successfully")
+        listenForAudioDeviceChanges()
+    }
+
+    // MARK: - Audio Device Change Detection
+
+    private var deviceChangeListenerInstalled = false
+
+    /// Restart SCStream when the default output device changes (e.g., AirPods connect/disconnect).
+    /// ScreenCaptureKit's audio tap goes stale on device change — buffers become all zeros.
+    private func listenForAudioDeviceChanges() {
+        guard !deviceChangeListenerInstalled else { return }
+        deviceChangeListenerInstalled = true
+
+        var address = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        AudioObjectAddPropertyListenerBlock(
+            AudioObjectID(kAudioObjectSystemObject),
+            &address,
+            DispatchQueue.main
+        ) { [weak self] _, _ in
+            guard let self = self, self.isCapturing else { return }
+            self.log("Audio output device changed — restarting capture")
+            Task {
+                await self.stopCapture()
+                try? await Task.sleep(nanoseconds: 500_000_000) // 0.5s settle
+                try? await self.startCapture()
+            }
+        }
     }
 
     func stopCapture() async {
