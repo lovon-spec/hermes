@@ -75,16 +75,17 @@ def _get_pipeline():
                     pipeline,
                 )
 
+                device = "mps" if torch.backends.mps.is_available() else "cpu"
                 tokenizer = AutoTokenizer.from_pretrained(_MODEL_NAME)
                 model = AutoModelForSeq2SeqLM.from_pretrained(
                     _MODEL_NAME,
-                    torch_dtype=torch.float32,
+                    dtype=torch.float32,
                 )
                 _pipeline = pipeline(
                     "translation",
                     model=model,
                     tokenizer=tokenizer,
-                    device=-1,  # CPU (MPS not needed for 1.3B text model)
+                    device=device,
                 )
     return _pipeline
 
