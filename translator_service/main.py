@@ -94,22 +94,27 @@ def _process_audio(pcm_bytes: bytes, language: Optional[str]) -> dict:
     source_lang = result["source_lang"]
     is_final = result["is_final"]
 
-    # Translate confirmed text through NLLB if it is non-English
+    # Use the best available text: confirmed if we have it, otherwise tentative
+    # LocalAgreement is conservative, so tentative often has the real content
+    display_text = confirmed if confirmed.strip() else tentative
+
+    # Translate through NLLB if non-English
     translation = ""
+    original_text = display_text
     skipped = True
-    if confirmed and confirmed.strip():
+    if display_text and display_text.strip():
         if source_lang == "en":
-            translation = confirmed
+            translation = display_text
         else:
-            nllb_result = nllb_engine.translate(confirmed, source_lang=source_lang)
+            nllb_result = nllb_engine.translate(display_text, source_lang=source_lang)
             translation = nllb_result["translation"]
             skipped = False
 
     latency = int((time.perf_counter() - t0) * 1000)
     return {
         "translation": translation,
-        "original_text": confirmed,
-        "tentative": tentative,
+        "original_text": original_text,
+        "tentative": tentative if confirmed.strip() else "",
         "source_lang": source_lang,
         "latency_ms": latency,
         "is_final": is_final,
