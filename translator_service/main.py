@@ -147,7 +147,6 @@ async def translate(request: Request) -> JSONResponse:
         return JSONResponse(result)
     except Exception as exc:
         logger.exception("Error processing audio")
-        _busy = False
         return JSONResponse(
             {"error": str(exc)},
             status_code=500,
