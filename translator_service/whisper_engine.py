@@ -22,10 +22,6 @@ _mlx_whisper = None
 # Serialize all MLX/Metal GPU operations to prevent concurrent command buffer access
 _inference_lock = threading.Lock()
 
-# Silence threshold: RMS below this means no meaningful audio
-_SILENCE_RMS_THRESHOLD = 0.01
-
-
 def _get_module():
     """Return the mlx_whisper module, importing it exactly once (thread-safe)."""
     global _mlx_whisper
@@ -44,14 +40,6 @@ def _pcm_bytes_to_float32(raw: bytes) -> np.ndarray:
     return samples
 
 
-def _is_silence(audio: np.ndarray) -> bool:
-    """Return True if the audio is effectively silent."""
-    if len(audio) == 0:
-        return True
-    rms = np.sqrt(np.mean(audio ** 2))
-    return rms < _SILENCE_RMS_THRESHOLD
-
-
 def transcribe(pcm_bytes: bytes, *, language: Optional[str] = None) -> dict:
     """
     Transcribe raw PCM audio bytes.
@@ -60,7 +48,7 @@ def transcribe(pcm_bytes: bytes, *, language: Optional[str] = None) -> dict:
     """
     audio = _pcm_bytes_to_float32(pcm_bytes)
 
-    if _is_silence(audio):
+    if len(audio) == 0:
         return {"text": "", "language": language or ""}
 
     mlx_w = _get_module()
