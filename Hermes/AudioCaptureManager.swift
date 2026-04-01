@@ -22,9 +22,12 @@ class AudioCaptureManager: NSObject {
 
     // MARK: - Configuration
     private let targetSampleRate: Double = 16000
-    private let chunkDuration: Double = 3.0       // seconds per chunk sent to Whisper
-    private let overlapDuration: Double = 0.3     // small overlap to catch boundary words
+    private let chunkDuration: Double = 2.0       // seconds per chunk; Python streaming engine handles continuity
     private let translationURL = URL(string: "http://localhost:5005/translate")!
+
+    /// Language code sent to the translation service via X-Language header.
+    /// Set by AppDelegate before starting capture. Defaults to Georgian.
+    var language: String = "ka"
 
     // MARK: - State
     private var stream: SCStream?
@@ -32,8 +35,8 @@ class AudioCaptureManager: NSObject {
     private let bufferQueue = DispatchQueue(label: "com.hermes.translator.audio")
     private(set) var isCapturing = false
 
-    /// Called on the main queue with (translation, originalText?)
-    var onTranslation: ((String, String?) -> Void)?
+    /// Called on the main queue with (translation, originalText?, tentativeText?)
+    var onTranslation: ((String, String?, String?) -> Void)?
 
     /// Called with raw PCM chunk data (for external consumers, if needed)
     var onChunkReady: AudioChunkCallback?
@@ -180,34 +183,21 @@ class AudioCaptureManager: NSObject {
         flushChunkIfReady()
     }
 
-    /// When enough audio has accumulated, flush a chunk (with overlap) and send to translation service
+    /// When enough audio has accumulated, flush a chunk and send to translation service.
+    /// No overlap -- the Python streaming engine maintains its own rolling buffer for continuity.
+    /// No RMS silence check -- the Python side uses Silero VAD.
     private func flushChunkIfReady() {
         let chunkBytes = Int(targetSampleRate * chunkDuration) * 2   // 2 bytes per sample
-        let overlapBytes = Int(targetSampleRate * overlapDuration) * 2
 
         while pcmBuffer.count >= chunkBytes {
-            let chunk = pcmBuffer.prefix(chunkBytes)
+            let chunk = Data(pcmBuffer.prefix(chunkBytes))
 
-            // Compute RMS to skip silence
-            let rms = chunk.withUnsafeBytes { buf -> Double in
-                let int16s = buf.bindMemory(to: Int16.self)
-                var sum: Double = 0
-                for s in int16s { sum += Double(s) * Double(s) }
-                return sqrt(sum / Double(int16s.count))
-            }
+            // Consume the chunk from the front of the buffer
+            pcmBuffer = pcmBuffer.subdata(in: chunkBytes..<pcmBuffer.count)
 
-            // Consume chunk but keep last overlapBytes for next chunk's start
-            let advance = chunkBytes - overlapBytes
-            pcmBuffer = pcmBuffer.subdata(in: advance..<pcmBuffer.count)
-
-            if rms < 50 {
-                log("Skipping silent chunk (RMS=\(String(format: "%.1f", rms)))")
-                continue
-            }
-
-            log("Sending chunk: \(chunk.count) bytes (\(Double(chunk.count) / 32000.0)s audio) RMS=\(String(format: "%.1f", rms))")
-            onChunkReady?(Data(chunk))
-            sendChunkToTranslationService(Data(chunk))
+            log("Sending chunk: \(chunk.count) bytes (\(Double(chunk.count) / 32000.0)s audio)")
+            onChunkReady?(chunk)
+            sendChunkToTranslationService(chunk)
         }
     }
 
@@ -218,6 +208,7 @@ class AudioCaptureManager: NSObject {
         var request = URLRequest(url: translationURL)
         request.httpMethod = "POST"
         request.setValue("audio/raw", forHTTPHeaderField: "Content-Type")
+        request.setValue(language, forHTTPHeaderField: "X-Language")
         request.httpBody = audioData
         request.timeoutInterval = 30
 
@@ -240,11 +231,19 @@ class AudioCaptureManager: NSObject {
                    let translation = json["translation"] as? String,
                    !translation.isEmpty {
                     let original = json["original_text"] as? String
-                    let skipped = json["skipped"] as? Bool ?? true
-                    self?.log("Showing subtitle: \(translation)")
+                    let tentative = json["tentative"] as? String
+                    let skipped = json["skipped"] as? Bool ?? false
+                    if let latency = json["latency_ms"] as? Int {
+                        self?.log("Latency: \(latency)ms")
+                    }
+                    self?.log("Showing subtitle: \(translation)" +
+                              (tentative != nil ? " [tentative: \(tentative!)]" : ""))
                     DispatchQueue.main.async {
-                        // Pass original text only for actual translations (not skipped/passthrough)
-                        self?.onTranslation?(translation, skipped ? nil : original)
+                        self?.onTranslation?(
+                            translation,
+                            skipped ? nil : original,
+                            tentative
+                        )
                     }
                 }
             } catch {

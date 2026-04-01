@@ -122,14 +122,37 @@ class SubtitleOverlayWindow: NSPanel {
         }
     }
 
-    /// Display a translated subtitle, with optional original transcription for foreign languages
-    func showSubtitle(_ text: String, original: String? = nil) {
+    /// Display a translated subtitle, with optional original transcription and tentative trailing text.
+    /// Confirmed text is shown in bold white; tentative text appears in lighter gray italic on the same line.
+    func showSubtitle(_ text: String, original: String? = nil, tentative: String? = nil) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
 
-            self.subtitleLabel.stringValue = text
+            // Build attributed string: confirmed (bold white) + tentative (gray italic)
+            let confirmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let attributed = NSMutableAttributedString()
+
+            let confirmedAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.systemFont(ofSize: 18, weight: .bold),
+                .foregroundColor: NSColor.white
+            ]
+            attributed.append(NSAttributedString(string: confirmed, attributes: confirmedAttrs))
+
+            if let tent = tentative?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !tent.isEmpty {
+                let tentativeAttrs: [NSAttributedString.Key: Any] = [
+                    .font: NSFont(descriptor: NSFont.systemFont(ofSize: 16, weight: .regular)
+                        .fontDescriptor.withSymbolicTraits(.italic), size: 16)
+                        ?? NSFont.systemFont(ofSize: 16, weight: .regular),
+                    .foregroundColor: NSColor.white.withAlphaComponent(0.5)
+                ]
+                attributed.append(NSAttributedString(string: " " + tent, attributes: tentativeAttrs))
+            }
+
+            self.subtitleLabel.attributedStringValue = attributed
+
             if let orig = original, !orig.isEmpty, orig != text {
                 self.originalLabel.stringValue = orig
                 self.originalLabel.isHidden = false

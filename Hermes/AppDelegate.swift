@@ -18,6 +18,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var stopMenuItem: NSMenuItem?
     private var statusMenuItem: NSMenuItem?
 
+    // MARK: - Language selection
+
+    private var selectedLanguage = "ka"
+    private var languageMenuItems: [NSMenuItem] = []
+
     // MARK: - State
 
     private var isCapturing = false
@@ -93,6 +98,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         stop.isHidden = true
         menu.addItem(stop)
         stopMenuItem = stop
+
+        // Language submenu
+        let languageItem = NSMenuItem(title: "Language", action: nil, keyEquivalent: "")
+        let languageSubmenu = NSMenu(title: "Language")
+
+        let languages: [(title: String, code: String)] = [
+            ("Georgian (\u{10E5}\u{10D0}\u{10E0}\u{10D7}\u{10E3}\u{10DA}\u{10D8})", "ka"),
+            ("English", "en"),
+            ("Auto-detect", "auto")
+        ]
+
+        for lang in languages {
+            let item = NSMenuItem(title: lang.title, action: #selector(selectLanguage(_:)), keyEquivalent: "")
+            item.target = self
+            item.representedObject = lang.code
+            if lang.code == selectedLanguage {
+                item.state = .on
+            }
+            languageSubmenu.addItem(item)
+            languageMenuItems.append(item)
+        }
+
+        languageItem.submenu = languageSubmenu
+        menu.addItem(languageItem)
 
         menu.addItem(NSMenuItem.separator())
 
@@ -259,11 +288,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Task {
             do {
                 let manager = AudioCaptureManager()
+                manager.language = selectedLanguage
 
                 // Wire audio manager's translation callback to the subtitle overlay
-                manager.onTranslation = { [weak self] text, original in
+                manager.onTranslation = { [weak self] text, original, tentative in
                     Task { @MainActor in
-                        self?.overlayWindow?.showSubtitle(text, original: original)
+                        self?.overlayWindow?.showSubtitle(text, original: original, tentative: tentative)
                     }
                 }
 
@@ -296,6 +326,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+    }
+
+    @objc private func selectLanguage(_ sender: NSMenuItem) {
+        guard let code = sender.representedObject as? String else { return }
+        selectedLanguage = code
+        log("Language changed to: \(code)")
+
+        // Update checkmarks
+        for item in languageMenuItems {
+            item.state = (item.representedObject as? String) == code ? .on : .off
+        }
+
+        // Update the live audio manager if currently capturing
+        audioManager?.language = code
     }
 
     @objc private func stopTranslation() {

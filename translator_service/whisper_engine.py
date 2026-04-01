@@ -40,13 +40,39 @@ def _pcm_bytes_to_float32(raw: bytes) -> np.ndarray:
     return samples
 
 
-def transcribe(pcm_bytes: bytes, *, language: Optional[str] = None) -> dict:
+def transcribe(
+    pcm_bytes: Optional[bytes] = None,
+    *,
+    audio_array: Optional[np.ndarray] = None,
+    language: Optional[str] = None,
+    initial_prompt: Optional[str] = None,
+) -> dict:
     """
-    Transcribe raw PCM audio bytes.
+    Transcribe raw PCM audio bytes or a pre-built float32 numpy array.
+
+    Pass *either* ``pcm_bytes`` (raw 16-bit LE PCM) **or** ``audio_array``
+    (float32 numpy, values in [-1, 1]).  If both are given, ``audio_array``
+    takes precedence.
+
+    Parameters
+    ----------
+    pcm_bytes : bytes | None
+        Raw 16 kHz mono 16-bit signed little-endian PCM.
+    audio_array : np.ndarray | None
+        Float32 numpy array already converted, values in [-1, 1].
+    language : str | None
+        ISO 639-1 language code for Whisper.  ``None`` = auto-detect.
+    initial_prompt : str | None
+        Prompt text to condition the decoder for better continuity.
 
     Returns dict {"text": str, "language": str}
     """
-    audio = _pcm_bytes_to_float32(pcm_bytes)
+    if audio_array is not None:
+        audio = audio_array
+    elif pcm_bytes is not None:
+        audio = _pcm_bytes_to_float32(pcm_bytes)
+    else:
+        return {"text": "", "language": language or ""}
 
     if len(audio) == 0:
         return {"text": "", "language": language or ""}
@@ -58,6 +84,8 @@ def transcribe(pcm_bytes: bytes, *, language: Optional[str] = None) -> dict:
     }
     if language is not None:
         kwargs["language"] = language
+    if initial_prompt:
+        kwargs["initial_prompt"] = initial_prompt
 
     # Serialize Metal GPU access — concurrent MLX calls crash the command buffer
     with _inference_lock:
