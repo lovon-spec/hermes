@@ -96,6 +96,16 @@ class SubtitleOverlayWindow: NSPanel {
         }
     }
 
+    private func overlayLog(_ message: String) {
+        let line = "\(Date()): [Overlay] \(message)\n"
+        if let data = line.data(using: .utf8),
+           let handle = FileHandle(forWritingAtPath: "/tmp/hermes-debug.log") {
+            handle.seekToEndOfFile()
+            handle.write(data)
+            handle.closeFile()
+        }
+    }
+
     /// Display a translated subtitle, positioning the window over iPhone Mirroring
     func showSubtitle(_ text: String) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
@@ -113,6 +123,7 @@ class SubtitleOverlayWindow: NSPanel {
                 self.animator().alphaValue = 1.0
             }
             self.orderFrontRegardless()
+            self.overlayLog("frame=\(self.frame) alpha=\(self.alphaValue) visible=\(self.isVisible) text=\(text.prefix(40))")
 
             // Schedule fade out
             self.fadeOutTimer = Timer.scheduledTimer(withTimeInterval: self.fadeOutDelay, repeats: false) { [weak self] _ in

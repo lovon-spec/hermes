@@ -165,17 +165,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 
-        // Log stderr asynchronously for debugging
-        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
+        // Log stderr/stdout to debug file
+        stderrPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
             if !data.isEmpty, let text = String(data: data, encoding: .utf8) {
-                print("[Python stderr] \(text)", terminator: "")
+                self?.log("[Python] \(text.trimmingCharacters(in: .whitespacesAndNewlines))")
             }
         }
-        stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
+        stdoutPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
             if !data.isEmpty, let text = String(data: data, encoding: .utf8) {
-                print("[Python stdout] \(text)", terminator: "")
+                self?.log("[Python] \(text.trimmingCharacters(in: .whitespacesAndNewlines))")
             }
         }
 
