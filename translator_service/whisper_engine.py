@@ -81,9 +81,6 @@ def transcribe(
 
     kwargs = {
         "path_or_hf_repo": _MODEL_REPO,
-        "condition_on_previous_text": False,  # prevents hallucination loops
-        "compression_ratio_threshold": 1.8,   # reject highly repetitive output
-        "no_speech_threshold": 0.5,           # skip low-confidence segments
     }
     if language is not None:
         kwargs["language"] = language
@@ -95,16 +92,6 @@ def transcribe(
         result = mlx_w.transcribe(audio, **kwargs)
 
     text = (result.get("text") or "").strip()
-
-    # Detect and reject hallucination loops (repeated characters/words)
-    if len(text) > 20:
-        words = text.split()
-        if len(words) > 3 and len(set(words)) <= 2:
-            text = ""  # all same word repeated = hallucination
-        # Check for repeated character patterns
-        unique_chars = set(text.replace(" ", ""))
-        if len(unique_chars) <= 3 and len(text) > 10:
-            text = ""  # e.g. "ეეეეეეეეეეე"
     detected_lang = result.get("language", language or "")
 
     return {
