@@ -65,64 +65,73 @@ async def health() -> JSONResponse:
 
 
 # ── Translate ──────────────────────────────────────────────────────────
-def _process_audio(pcm_bytes: bytes) -> dict:
-    """Synchronous work: Whisper STT then NLLB translation.
-    Runs inside a thread-pool executor so the event loop is not blocked."""
+_busy = False  # simple flag to drop requests when already processing
 
+def _process_audio(pcm_bytes: bytes) -> dict:
+    """Synchronous work: Whisper STT then NLLB translation."""
+    global _busy
+    _busy = True
+    try:
+        return _do_process(pcm_bytes)
+    finally:
+        _busy = False
+
+
+def _do_process(pcm_bytes: bytes) -> dict:
     t0 = time.perf_counter()
 
-    # 1. Transcribe with Whisper (auto-detect language)
     stt = whisper_engine.transcribe(pcm_bytes, language=None)
     text = stt["text"]
     source_lang = stt["language"]
 
-    # Empty / whitespace transcript -> skip
     if not text or not text.strip():
-        latency = int((time.perf_counter() - t0) * 1000)
         return {
             "translation": "",
             "source_lang": source_lang,
             "original_text": "",
-            "latency_ms": latency,
+            "latency_ms": int((time.perf_counter() - t0) * 1000),
             "skipped": True,
         }
 
-    # Source is already English -> skip translation
     if source_lang == "en":
-        latency = int((time.perf_counter() - t0) * 1000)
         return {
             "translation": text,
             "source_lang": "en",
             "original_text": text,
-            "latency_ms": latency,
+            "latency_ms": int((time.perf_counter() - t0) * 1000),
             "skipped": True,
         }
 
-    # 2. Translate with NLLB
     nllb_result = nllb_engine.translate(text, source_lang=source_lang)
-
-    latency = int((time.perf_counter() - t0) * 1000)
     return {
         "translation": nllb_result["translation"],
         "source_lang": source_lang,
         "original_text": text,
-        "latency_ms": latency,
+        "latency_ms": int((time.perf_counter() - t0) * 1000),
         "skipped": False,
     }
 
 
 @app.post("/translate")
 async def translate(request: Request) -> JSONResponse:
-    # Service must be ready before accepting work.
     if not _ready:
         return JSONResponse(
             {"error": "Service is still loading models. Try again shortly."},
             status_code=503,
         )
 
+    # Drop request if already processing — prevents queue buildup
+    if _busy:
+        return JSONResponse({
+            "translation": "",
+            "source_lang": "",
+            "original_text": "",
+            "latency_ms": 0,
+            "skipped": True,
+        })
+
     pcm_bytes = await request.body()
 
-    # Too short or empty -> skip
     if len(pcm_bytes) < _MIN_AUDIO_BYTES:
         return JSONResponse({
             "translation": "",
@@ -138,6 +147,7 @@ async def translate(request: Request) -> JSONResponse:
         return JSONResponse(result)
     except Exception as exc:
         logger.exception("Error processing audio")
+        _busy = False
         return JSONResponse(
             {"error": str(exc)},
             status_code=500,
