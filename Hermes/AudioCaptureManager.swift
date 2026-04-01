@@ -22,14 +22,12 @@ class AudioCaptureManager: NSObject {
 
     // MARK: - Configuration
     private let targetSampleRate: Double = 16000
-    private let chunkDuration: Double = 2.0       // seconds per chunk sent to Whisper
-    private let overlapDuration: Double = 0.5     // overlap between chunks to avoid word cuts
+    private let chunkDuration: Double = 3.0       // seconds per chunk sent to Whisper
     private let translationURL = URL(string: "http://localhost:5005/translate")!
 
     // MARK: - State
     private var stream: SCStream?
     private var pcmBuffer = Data()
-    private var lastSentCutoff = 0               // byte offset of last sent chunk end
     private let bufferQueue = DispatchQueue(label: "com.hermes.translator.audio")
     private(set) var isCapturing = false
 
@@ -94,7 +92,6 @@ class AudioCaptureManager: NSObject {
         isCapturing = false
         bufferQueue.sync {
             self.pcmBuffer = Data()
-            self.lastSentCutoff = 0
         }
     }
 
@@ -185,39 +182,29 @@ class AudioCaptureManager: NSObject {
     /// When enough audio has accumulated, flush a chunk (with overlap) and send to translation service
     private func flushChunkIfReady() {
         let chunkBytes = Int(targetSampleRate * chunkDuration) * 2   // 2 bytes per sample
-        let overlapBytes = Int(targetSampleRate * overlapDuration) * 2
 
-        while pcmBuffer.count - lastSentCutoff >= chunkBytes {
-            let start = max(0, lastSentCutoff - overlapBytes)
-            let end = lastSentCutoff + chunkBytes
-            let chunk = pcmBuffer.subdata(in: start..<min(end, pcmBuffer.count))
+        while pcmBuffer.count >= chunkBytes {
+            let chunk = pcmBuffer.prefix(chunkBytes)
 
-            // Compute RMS to skip silence (avoids wasting GPU on empty audio)
+            // Compute RMS to skip silence
             let rms = chunk.withUnsafeBytes { buf -> Double in
                 let int16s = buf.bindMemory(to: Int16.self)
                 var sum: Double = 0
                 for s in int16s { sum += Double(s) * Double(s) }
                 return sqrt(sum / Double(int16s.count))
             }
-            log("Chunk ready: \(chunk.count) bytes (\(Double(chunk.count) / 32000.0)s audio) RMS=\(String(format: "%.1f", rms))")
 
-            // Skip very quiet chunks — RMS < 50 for 16-bit audio is effectively silence
+            // Drop the chunk from the buffer regardless of whether we send it
+            pcmBuffer = pcmBuffer.subdata(in: chunkBytes..<pcmBuffer.count)
+
             if rms < 50 {
                 log("Skipping silent chunk (RMS=\(String(format: "%.1f", rms)))")
                 continue
             }
-            onChunkReady?(chunk)
-            sendChunkToTranslationService(chunk)
 
-            lastSentCutoff += chunkBytes
-
-            // Trim buffer to avoid unbounded growth -- keep last 10 seconds
-            let maxBytes = Int(targetSampleRate * 10) * 2
-            if pcmBuffer.count > maxBytes {
-                let trim = pcmBuffer.count - maxBytes
-                pcmBuffer = pcmBuffer.subdata(in: trim..<pcmBuffer.count)
-                lastSentCutoff = max(0, lastSentCutoff - trim)
-            }
+            log("Sending chunk: \(chunk.count) bytes (\(Double(chunk.count) / 32000.0)s audio) RMS=\(String(format: "%.1f", rms))")
+            onChunkReady?(Data(chunk))
+            sendChunkToTranslationService(Data(chunk))
         }
     }
 
