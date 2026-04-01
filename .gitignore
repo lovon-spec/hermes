@@ -1,0 +1,40 @@
+# Xcode
+build/
+DerivedData/
+*.xcuserdata/
+*.xcworkspace/
+xcuserdata/
+*.pbxuser
+*.mode1v3
+*.mode2v3
+*.perspectivev3
+*.moved-aside
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+*.egg
+.venv/
+venv/
+env/
+
+# ML models (downloaded at runtime)
+translator_service/models/
+*.bin
+*.safetensors
+*.gguf
+
+# IDE
+.vscode/
+.idea/
+
+# xcodegen (project can be regenerated)
+project.yml

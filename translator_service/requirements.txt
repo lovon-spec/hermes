@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+mlx-whisper
+transformers
+sentencepiece
+numpy
+torch
