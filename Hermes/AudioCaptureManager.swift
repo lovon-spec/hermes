@@ -192,7 +192,14 @@ class AudioCaptureManager: NSObject {
             let end = lastSentCutoff + chunkBytes
             let chunk = pcmBuffer.subdata(in: start..<min(end, pcmBuffer.count))
 
-            log("Sending chunk: \(chunk.count) bytes (\(Double(chunk.count) / 32000.0)s audio)")
+            // Compute RMS to check if we're capturing real audio
+            let samples = chunk.withUnsafeBytes { buf -> Double in
+                let int16s = buf.bindMemory(to: Int16.self)
+                var sum: Double = 0
+                for s in int16s { sum += Double(s) * Double(s) }
+                return sqrt(sum / Double(int16s.count))
+            }
+            log("Sending chunk: \(chunk.count) bytes (\(Double(chunk.count) / 32000.0)s audio) RMS=\(String(format: "%.1f", samples))")
             onChunkReady?(chunk)
             sendChunkToTranslationService(chunk)
 
