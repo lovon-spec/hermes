@@ -1,7 +1,6 @@
 import Cocoa
 import ScreenCaptureKit
 
-@main
 class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Components
