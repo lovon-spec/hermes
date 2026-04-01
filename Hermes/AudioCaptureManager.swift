@@ -8,6 +8,18 @@ typealias AudioChunkCallback = (Data) -> Void
 
 class AudioCaptureManager: NSObject {
 
+    // MARK: - Debug logging
+    private let logFile = "/tmp/hermes-debug.log"
+    private func log(_ message: String) {
+        let line = "\(Date()): [Audio] \(message)\n"
+        if let data = line.data(using: .utf8),
+           let handle = FileHandle(forWritingAtPath: logFile) {
+            handle.seekToEndOfFile()
+            handle.write(data)
+            handle.closeFile()
+        }
+    }
+
     // MARK: - Configuration
     private let targetSampleRate: Double = 16000
     private let chunkDuration: Double = 2.0       // seconds per chunk sent to Whisper
@@ -34,20 +46,27 @@ class AudioCaptureManager: NSObject {
 
         // Find iPhone Mirroring window dynamically -- its display name contains "iPhone"
         // or the app uses the known ScreenContinuity bundle identifier
+        // Log all available apps for debugging
+        log("Available apps: \(content.applications.map { "\($0.applicationName) (\($0.bundleIdentifier))" })")
+
         guard let iphoneApp = content.applications.first(where: { app in
             app.bundleIdentifier == "com.apple.ScreenContinuity" ||
             app.applicationName.localizedCaseInsensitiveContains("iPhone Mirroring") ||
             app.applicationName.localizedCaseInsensitiveContains("iPhone")
         }) else {
+            log("ERROR: iPhone Mirroring app not found in \(content.applications.count) apps")
             throw CaptureError.iphoneMirroringNotFound
         }
+        log("Found iPhone Mirroring app: \(iphoneApp.applicationName) (\(iphoneApp.bundleIdentifier))")
 
         let targetWindow = content.windows.first(where: {
             $0.owningApplication?.bundleIdentifier == iphoneApp.bundleIdentifier
         })
         guard let window = targetWindow else {
+            log("ERROR: No window found for \(iphoneApp.bundleIdentifier)")
             throw CaptureError.iphoneMirroringNotFound
         }
+        log("Target window: \(window.title ?? "untitled") frame=\(window.frame)")
 
         let filter = SCContentFilter(desktopIndependentWindow: window)
 
@@ -66,6 +85,7 @@ class AudioCaptureManager: NSObject {
 
         stream = newStream
         isCapturing = true
+        log("Capture started successfully")
     }
 
     func stopCapture() async {
@@ -80,8 +100,13 @@ class AudioCaptureManager: NSObject {
 
     // MARK: - Audio Processing
 
+    private var audioCallbackCount = 0
     /// Convert an SCStream audio buffer to 16kHz mono PCM Data and accumulate into the buffer
     private func processAudioBuffer(_ sampleBuffer: CMSampleBuffer) {
+        audioCallbackCount += 1
+        if audioCallbackCount <= 3 || audioCallbackCount % 50 == 0 {
+            log("processAudioBuffer #\(audioCallbackCount), buffer=\(pcmBuffer.count) bytes")
+        }
         guard let formatDesc = CMSampleBufferGetFormatDescription(sampleBuffer),
               let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(formatDesc) else { return }
 
@@ -167,6 +192,7 @@ class AudioCaptureManager: NSObject {
             let end = lastSentCutoff + chunkBytes
             let chunk = pcmBuffer.subdata(in: start..<min(end, pcmBuffer.count))
 
+            log("Sending chunk: \(chunk.count) bytes (\(Double(chunk.count) / 32000.0)s audio)")
             onChunkReady?(chunk)
             sendChunkToTranslationService(chunk)
 
@@ -194,22 +220,29 @@ class AudioCaptureManager: NSObject {
 
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             if let error = error {
-                print("[AudioCapture] Translation request failed: \(error.localizedDescription)")
+                self?.log("Translation request FAILED: \(error.localizedDescription)")
                 return
             }
-            guard let data = data else { return }
+            guard let data = data else {
+                self?.log("Translation response: no data")
+                return
+            }
 
-            // Parse JSON response: {"translation": "...", "source_lang": "...", "confidence": 0.97, "latency_ms": 480}
+            if let raw = String(data: data, encoding: .utf8) {
+                self?.log("Translation response: \(raw.prefix(200))")
+            }
+
             do {
                 if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let translation = json["translation"] as? String,
                    !translation.isEmpty {
+                    self?.log("Showing subtitle: \(translation)")
                     DispatchQueue.main.async {
                         self?.onTranslation?(translation)
                     }
                 }
             } catch {
-                print("[AudioCapture] Failed to parse translation response: \(error)")
+                self?.log("Failed to parse response: \(error)")
             }
         }.resume()
     }
@@ -219,7 +252,7 @@ class AudioCaptureManager: NSObject {
 
 extension AudioCaptureManager: SCStreamDelegate {
     func stream(_ stream: SCStream, didStopWithError error: Error) {
-        print("[AudioCapture] Stream stopped: \(error.localizedDescription)")
+        log("Stream stopped with error: \(error.localizedDescription)")
         DispatchQueue.main.async { [weak self] in
             self?.isCapturing = false
         }

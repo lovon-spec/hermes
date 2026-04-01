@@ -254,6 +254,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func startTranslation() {
         guard isServiceReady, !isCapturing else { return }
+        log("startTranslation clicked")
 
         Task {
             do {
@@ -267,6 +268,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
 
                 try await manager.startCapture()
+                log("capture started successfully")
 
                 await MainActor.run {
                     self.audioManager = manager
@@ -274,8 +276,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     self.updateMenuForState()
                     self.windowTracker?.startTracking()
                     self.startOverlayTracking()
+                    self.log("tracking started")
                 }
             } catch CaptureError.iphoneMirroringNotFound {
+                log("ERROR: iPhone Mirroring not found")
                 await MainActor.run {
                     self.showAlert(
                         title: "iPhone Mirroring Not Found",
@@ -283,6 +287,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     )
                 }
             } catch {
+                log("ERROR: capture failed: \(error)")
                 await MainActor.run {
                     self.showAlert(
                         title: "Capture Error",
