@@ -77,7 +77,7 @@ if [ -f "$PROJECT_DIR/static/icon.svg" ]; then
 fi
 
 # 8. Sign with entitlements
-SIGN_IDENTITY=$(security find-identity -v -p codesigning | grep "Hermes Dev" | head -1 | awk -F'"' '{print $2}')
+SIGN_IDENTITY=$(security find-identity -v -p codesigning | grep "Hermes Dev" | head -1 | sed 's/.*"\(.*\)".*/\1/')
 if [ -n "$SIGN_IDENTITY" ]; then
     codesign --force --sign "$SIGN_IDENTITY" --entitlements "$PROJECT_DIR/Hermes/Hermes.entitlements" "$APP_BUNDLE" && \
         echo "Code signed with '$SIGN_IDENTITY'."
