@@ -51,7 +51,6 @@ mkdir -p "$APP_BUNDLE/Contents/Resources"
 
 mv /tmp/hermes-build "$APP_BUNDLE/Contents/MacOS/Hermes"
 cp "$PROJECT_DIR/Hermes/Info.plist" "$APP_BUNDLE/Contents/"
-cp "$PROJECT_DIR/Hermes/Hermes.entitlements" "$APP_BUNDLE/Contents/"
 cp -r "$PROJECT_DIR/translator_service" "$APP_BUNDLE/Contents/Resources/translator_service"
 
 # 7. Convert SVG icon to icns (if sips available)
