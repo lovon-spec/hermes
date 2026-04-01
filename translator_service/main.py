@@ -144,8 +144,24 @@ async def translate(request: Request) -> JSONResponse:
         )
 
 
+# ── Parent watchdog ───────────────────────────────────────────────────
+def _watch_parent() -> None:
+    """Exit if parent process dies (prevents orphaned Python processes)."""
+    import os, signal
+    ppid = os.getppid()
+    while True:
+        time.sleep(2)
+        try:
+            os.kill(ppid, 0)  # check if parent is alive
+        except OSError:
+            logger.info("Parent process gone, shutting down.")
+            os.kill(os.getpid(), signal.SIGTERM)
+            break
+
+
 # ── Entrypoint ─────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
 
+    threading.Thread(target=_watch_parent, daemon=True).start()
     uvicorn.run(app, host="127.0.0.1", port=5005, log_level="warning")

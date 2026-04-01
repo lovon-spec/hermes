@@ -1,67 +1,65 @@
 import Foundation
 
 /// Lightweight HTTP client for checking the Python translation service health.
-/// The actual /translate calls are handled internally by AudioCaptureManager.
 class TranslationClient {
 
     private let baseURL = URL(string: "http://127.0.0.1:5005")!
     private var pollTimer: Timer?
+    private let logFile = "/tmp/hermes-debug.log"
 
-    // MARK: - Health Check
+    private func log(_ message: String) {
+        let line = "\(Date()): [TranslationClient] \(message)\n"
+        if let data = line.data(using: .utf8),
+           let handle = FileHandle(forWritingAtPath: logFile) {
+            handle.seekToEndOfFile()
+            handle.write(data)
+            handle.closeFile()
+        }
+    }
 
-    /// Single health check. Returns true if the service responds 200 with {"status": "ready"}.
     func checkHealth() async -> Bool {
         let url = baseURL.appendingPathComponent("health")
         do {
             let (data, response) = try await URLSession.shared.data(from: url)
-            guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200 else {
+            guard let httpResponse = response as? HTTPURLResponse else {
+                log("health: no HTTP response")
                 return false
             }
+            log("health: HTTP \(httpResponse.statusCode)")
+            guard httpResponse.statusCode == 200 else { return false }
             if let json = try? JSONSerialization.jsonObject(with: data) as? [String: String],
                json["status"] == "ready" {
+                log("health: READY")
                 return true
             }
             return false
         } catch {
+            log("health: error \(error.localizedDescription)")
             return false
         }
     }
 
-    /// Poll /health at the given interval until the service is ready, then call onReady on the main queue.
     func pollUntilReady(interval: TimeInterval = 2.0, onReady: @escaping () -> Void) {
-        // Perform the first check immediately
-        Task {
-            if await checkHealth() {
-                await MainActor.run { onReady() }
-                return
-            }
-            await MainActor.run { [weak self] in
-                self?.startPolling(interval: interval, onReady: onReady)
-            }
-        }
+        log("pollUntilReady started")
+        startPolling(interval: interval, onReady: onReady)
     }
 
-    /// Stop any active polling timer. Must be called on the main thread.
     func stopPolling() {
         pollTimer?.invalidate()
         pollTimer = nil
     }
 
-    // MARK: - Private
-
     private func startPolling(interval: TimeInterval, onReady: @escaping () -> Void) {
         pollTimer?.invalidate()
-        // Timer fires on the main run loop. We do the async health check inside,
-        // and stop the timer via self.pollTimer reference (not the closure parameter)
-        // to avoid capturing the non-Sendable Timer in a Task closure.
         pollTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             guard let self = self else { return }
+            self.log("poll tick")
             Task {
                 let ready = await self.checkHealth()
                 if ready {
-                    await MainActor.run { [weak self] in
-                        self?.stopPolling()
+                    await MainActor.run {
+                        self.log("calling onReady callback")
+                        self.stopPolling()
                         onReady()
                     }
                 }
