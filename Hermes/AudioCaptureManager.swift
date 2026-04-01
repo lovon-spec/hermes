@@ -33,8 +33,8 @@ class AudioCaptureManager: NSObject {
     private let bufferQueue = DispatchQueue(label: "com.hermes.translator.audio")
     private(set) var isCapturing = false
 
-    /// Called on the main queue with each translated subtitle string
-    var onTranslation: ((String) -> Void)?
+    /// Called on the main queue with (translation, originalText?)
+    var onTranslation: ((String, String?) -> Void)?
 
     /// Called with raw PCM chunk data (for external consumers, if needed)
     var onChunkReady: AudioChunkCallback?
@@ -192,14 +192,20 @@ class AudioCaptureManager: NSObject {
             let end = lastSentCutoff + chunkBytes
             let chunk = pcmBuffer.subdata(in: start..<min(end, pcmBuffer.count))
 
-            // Compute RMS to check if we're capturing real audio
-            let samples = chunk.withUnsafeBytes { buf -> Double in
+            // Compute RMS to skip silence (avoids wasting GPU on empty audio)
+            let rms = chunk.withUnsafeBytes { buf -> Double in
                 let int16s = buf.bindMemory(to: Int16.self)
                 var sum: Double = 0
                 for s in int16s { sum += Double(s) * Double(s) }
                 return sqrt(sum / Double(int16s.count))
             }
-            log("Sending chunk: \(chunk.count) bytes (\(Double(chunk.count) / 32000.0)s audio) RMS=\(String(format: "%.1f", samples))")
+            log("Chunk ready: \(chunk.count) bytes (\(Double(chunk.count) / 32000.0)s audio) RMS=\(String(format: "%.1f", rms))")
+
+            // Skip very quiet chunks — RMS < 50 for 16-bit audio is effectively silence
+            if rms < 50 {
+                log("Skipping silent chunk (RMS=\(String(format: "%.1f", rms)))")
+                continue
+            }
             onChunkReady?(chunk)
             sendChunkToTranslationService(chunk)
 
@@ -243,9 +249,12 @@ class AudioCaptureManager: NSObject {
                 if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                    let translation = json["translation"] as? String,
                    !translation.isEmpty {
+                    let original = json["original_text"] as? String
+                    let skipped = json["skipped"] as? Bool ?? true
                     self?.log("Showing subtitle: \(translation)")
                     DispatchQueue.main.async {
-                        self?.onTranslation?(translation)
+                        // Pass original text only for actual translations (not skipped/passthrough)
+                        self?.onTranslation?(translation, skipped ? nil : original)
                     }
                 }
             } catch {

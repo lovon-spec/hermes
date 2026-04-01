@@ -261,9 +261,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let manager = AudioCaptureManager()
 
                 // Wire audio manager's translation callback to the subtitle overlay
-                manager.onTranslation = { [weak self] text in
+                manager.onTranslation = { [weak self] text, original in
                     Task { @MainActor in
-                        self?.overlayWindow?.showSubtitle(text)
+                        self?.overlayWindow?.showSubtitle(text, original: original)
                     }
                 }
 

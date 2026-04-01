@@ -5,6 +5,7 @@ class SubtitleOverlayWindow: NSPanel {
 
     // MARK: - UI Elements
     private let subtitleLabel = NSTextField()
+    private let originalLabel = NSTextField()
     private let backgroundView = NSVisualEffectView()
     private var fadeOutTimer: Timer?
     private let fadeOutDelay: TimeInterval = 3.5
@@ -69,17 +70,32 @@ class SubtitleOverlayWindow: NSPanel {
         subtitleLabel.maximumNumberOfLines = 3
         subtitleLabel.cell?.wraps = true
 
+        // Original text label (smaller, dimmer, shown above translation for foreign languages)
+        originalLabel.isEditable = false
+        originalLabel.isSelectable = false
+        originalLabel.isBordered = false
+        originalLabel.drawsBackground = false
+        originalLabel.textColor = NSColor.white.withAlphaComponent(0.6)
+        originalLabel.font = .systemFont(ofSize: 14, weight: .medium)
+        originalLabel.alignment = .center
+        originalLabel.lineBreakMode = .byWordWrapping
+        originalLabel.maximumNumberOfLines = 2
+        originalLabel.cell?.wraps = true
+        originalLabel.isHidden = true
+
         // Drop shadow on text for readability
         let shadow = NSShadow()
         shadow.shadowColor = NSColor.black.withAlphaComponent(0.8)
         shadow.shadowOffset = NSSize(width: 0, height: -1)
         shadow.shadowBlurRadius = 3
         subtitleLabel.shadow = shadow
+        originalLabel.shadow = shadow
 
         // Layout
         contentView = NSView()
         contentView!.wantsLayer = true
         contentView!.addSubview(backgroundView)
+        contentView!.addSubview(originalLabel)
         contentView!.addSubview(subtitleLabel)
 
         alphaValue = 0  // start hidden
@@ -106,14 +122,20 @@ class SubtitleOverlayWindow: NSPanel {
         }
     }
 
-    /// Display a translated subtitle, positioning the window over iPhone Mirroring
-    func showSubtitle(_ text: String) {
+    /// Display a translated subtitle, with optional original transcription for foreign languages
+    func showSubtitle(_ text: String, original: String? = nil) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
 
             self.subtitleLabel.stringValue = text
+            if let orig = original, !orig.isEmpty, orig != text {
+                self.originalLabel.stringValue = orig
+                self.originalLabel.isHidden = false
+            } else {
+                self.originalLabel.isHidden = true
+            }
             self.repositionWindow()
 
             // Fade in
@@ -151,17 +173,25 @@ class SubtitleOverlayWindow: NSPanel {
         let maxWidth: CGFloat = max(targetFrame.width - 40, 200)
         let textMaxWidth = maxWidth - horizontalPadding
 
-        // Use cell-based sizing for proper wrapping measurement
-        let windowWidth: CGFloat
-        let windowHeight: CGFloat
+        // Measure translation label
+        let translationSize: NSSize
         if let cell = subtitleLabel.cell {
-            let boundingRect = cell.cellSize(forBounds: NSRect(x: 0, y: 0, width: textMaxWidth, height: 200))
-            windowWidth = min(boundingRect.width + horizontalPadding, maxWidth)
-            windowHeight = max(boundingRect.height + verticalPadding, 40)
+            translationSize = cell.cellSize(forBounds: NSRect(x: 0, y: 0, width: textMaxWidth, height: 200))
         } else {
-            windowWidth = maxWidth
-            windowHeight = 40
+            translationSize = NSSize(width: textMaxWidth, height: 22)
         }
+
+        // Measure original label if visible
+        var originalSize = NSSize.zero
+        let showingOriginal = !originalLabel.isHidden
+        if showingOriginal, let cell = originalLabel.cell {
+            originalSize = cell.cellSize(forBounds: NSRect(x: 0, y: 0, width: textMaxWidth, height: 100))
+        }
+
+        let spacing: CGFloat = showingOriginal ? 4 : 0
+        let contentHeight = translationSize.height + (showingOriginal ? originalSize.height + spacing : 0)
+        let windowWidth = min(max(translationSize.width, originalSize.width) + horizontalPadding, maxWidth)
+        let windowHeight = max(contentHeight + verticalPadding, 40)
 
         // Position: bottom-center of target window
         let x = targetFrame.midX - windowWidth / 2
@@ -170,9 +200,17 @@ class SubtitleOverlayWindow: NSPanel {
         let windowFrame = CGRect(x: x, y: y, width: windowWidth, height: windowHeight)
         setFrame(windowFrame, display: true)
 
-        // Layout subviews to fill window
+        // Layout subviews
         backgroundView.frame = contentView!.bounds
-        subtitleLabel.frame = contentView!.bounds.insetBy(dx: 12, dy: 8)
+        let inset = contentView!.bounds.insetBy(dx: 12, dy: 8)
+        if showingOriginal {
+            originalLabel.frame = NSRect(x: inset.minX, y: inset.minY + translationSize.height + spacing,
+                                         width: inset.width, height: originalSize.height)
+            subtitleLabel.frame = NSRect(x: inset.minX, y: inset.minY,
+                                         width: inset.width, height: translationSize.height)
+        } else {
+            subtitleLabel.frame = inset
+        }
     }
 
     private func fadeOut() {
