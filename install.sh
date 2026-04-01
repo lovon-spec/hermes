@@ -76,9 +76,15 @@ if [ -f "$PROJECT_DIR/static/icon.svg" ]; then
     rm -rf "$(dirname "$ICONSET_DIR")"
 fi
 
-# 8. Sign with entitlements (ad-hoc)
-codesign --force --sign - --entitlements "$PROJECT_DIR/Hermes/Hermes.entitlements" "$APP_BUNDLE" 2>/dev/null && \
-    echo "Code signed with entitlements." || echo "Warning: codesign failed, ScreenCaptureKit may not work."
+# 8. Sign with entitlements
+SIGN_IDENTITY=$(security find-identity -v -p codesigning | grep "Hermes Dev" | head -1 | awk -F'"' '{print $2}')
+if [ -n "$SIGN_IDENTITY" ]; then
+    codesign --force --sign "$SIGN_IDENTITY" --entitlements "$PROJECT_DIR/Hermes/Hermes.entitlements" "$APP_BUNDLE" && \
+        echo "Code signed with '$SIGN_IDENTITY'."
+else
+    codesign --force --sign - --entitlements "$PROJECT_DIR/Hermes/Hermes.entitlements" "$APP_BUNDLE" 2>/dev/null && \
+        echo "Code signed (ad-hoc)." || echo "Warning: codesign failed, ScreenCaptureKit may not work."
+fi
 
 echo ""
 echo "=== Done ==="
