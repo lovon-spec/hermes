@@ -146,22 +146,31 @@ class SubtitleOverlayWindow: NSPanel {
     private func repositionWindow() {
         let targetFrame = trackedFrame ?? NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 600, height: 400)
 
-        // Size the window to fit the text
-        let maxWidth: CGFloat = targetFrame.width - 40
-        let horizontalPadding: CGFloat = 24  // 12pt each side
-        let verticalPadding: CGFloat = 16    // 8pt each side
-        let labelSize = subtitleLabel.sizeThatFits(NSSize(width: maxWidth - horizontalPadding, height: 200))
-        let windowWidth = min(labelSize.width + horizontalPadding, maxWidth)
-        let windowHeight = labelSize.height + verticalPadding
+        let horizontalPadding: CGFloat = 24
+        let verticalPadding: CGFloat = 16
+        let maxWidth: CGFloat = max(targetFrame.width - 40, 200)
+        let textMaxWidth = maxWidth - horizontalPadding
+
+        // Use cell-based sizing for proper wrapping measurement
+        let windowWidth: CGFloat
+        let windowHeight: CGFloat
+        if let cell = subtitleLabel.cell {
+            let boundingRect = cell.cellSize(forBounds: NSRect(x: 0, y: 0, width: textMaxWidth, height: 200))
+            windowWidth = min(boundingRect.width + horizontalPadding, maxWidth)
+            windowHeight = max(boundingRect.height + verticalPadding, 40)
+        } else {
+            windowWidth = maxWidth
+            windowHeight = 40
+        }
 
         // Position: bottom-center of target window
         let x = targetFrame.midX - windowWidth / 2
         let y = targetFrame.minY + 32
 
         let windowFrame = CGRect(x: x, y: y, width: windowWidth, height: windowHeight)
-        setFrame(windowFrame, display: false)
+        setFrame(windowFrame, display: true)
 
-        // Layout subviews
+        // Layout subviews to fill window
         backgroundView.frame = contentView!.bounds
         subtitleLabel.frame = contentView!.bounds.insetBy(dx: 12, dy: 8)
     }
