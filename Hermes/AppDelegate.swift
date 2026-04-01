@@ -213,9 +213,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             dir = dir.deletingLastPathComponent()
         }
 
-        // 3. Common development paths
-        candidates.append("/Users/vm/projects/hermes/translator_service")
-
         for candidate in candidates {
             let mainPy = (candidate as NSString).appendingPathComponent("main.py")
             if fm.fileExists(atPath: mainPy) {

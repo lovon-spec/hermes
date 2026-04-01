@@ -34,7 +34,7 @@ echo "Building for macOS $MACOS_VER..."
 
 # 5. Build Swift binary
 echo "Compiling Hermes..."
-swiftc -o "$PROJECT_DIR/Hermes" \
+swiftc -o "$PROJECT_DIR/hermes-app" \
     -target arm64-apple-macos${MACOS_VER} \
     -framework ScreenCaptureKit \
     -framework AVFoundation \
@@ -44,4 +44,4 @@ swiftc -o "$PROJECT_DIR/Hermes" \
 
 echo ""
 echo "=== Done ==="
-echo "Run with: $PROJECT_DIR/Hermes"
+echo "Run with: $PROJECT_DIR/hermes-app"

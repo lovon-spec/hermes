@@ -38,3 +38,4 @@ translator_service/models/
 
 # xcodegen (project can be regenerated)
 project.yml
+hermes-app
