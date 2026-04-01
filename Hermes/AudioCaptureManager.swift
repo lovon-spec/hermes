@@ -23,6 +23,7 @@ class AudioCaptureManager: NSObject {
     // MARK: - Configuration
     private let targetSampleRate: Double = 16000
     private let chunkDuration: Double = 3.0       // seconds per chunk sent to Whisper
+    private let overlapDuration: Double = 0.3     // small overlap to catch boundary words
     private let translationURL = URL(string: "http://localhost:5005/translate")!
 
     // MARK: - State
@@ -182,6 +183,7 @@ class AudioCaptureManager: NSObject {
     /// When enough audio has accumulated, flush a chunk (with overlap) and send to translation service
     private func flushChunkIfReady() {
         let chunkBytes = Int(targetSampleRate * chunkDuration) * 2   // 2 bytes per sample
+        let overlapBytes = Int(targetSampleRate * overlapDuration) * 2
 
         while pcmBuffer.count >= chunkBytes {
             let chunk = pcmBuffer.prefix(chunkBytes)
@@ -194,8 +196,9 @@ class AudioCaptureManager: NSObject {
                 return sqrt(sum / Double(int16s.count))
             }
 
-            // Drop the chunk from the buffer regardless of whether we send it
-            pcmBuffer = pcmBuffer.subdata(in: chunkBytes..<pcmBuffer.count)
+            // Consume chunk but keep last overlapBytes for next chunk's start
+            let advance = chunkBytes - overlapBytes
+            pcmBuffer = pcmBuffer.subdata(in: advance..<pcmBuffer.count)
 
             if rms < 50 {
                 log("Skipping silent chunk (RMS=\(String(format: "%.1f", rms)))")
