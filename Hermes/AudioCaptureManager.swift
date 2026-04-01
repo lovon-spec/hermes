@@ -216,7 +216,7 @@ class AudioCaptureManager: NSObject {
         request.httpMethod = "POST"
         request.setValue("audio/raw", forHTTPHeaderField: "Content-Type")
         request.httpBody = audioData
-        request.timeoutInterval = 10
+        request.timeoutInterval = 30
 
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
             if let error = error {

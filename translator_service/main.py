@@ -65,8 +65,6 @@ async def health() -> JSONResponse:
 
 
 # ── Translate ──────────────────────────────────────────────────────────
-_translate_lock = threading.Lock()
-
 def _process_audio(pcm_bytes: bytes) -> dict:
     t0 = time.perf_counter()
 
@@ -121,16 +119,6 @@ async def translate(request: Request) -> JSONResponse:
             "skipped": True,
         })
 
-    # Drop request if already processing — non-blocking trylock
-    if not _translate_lock.acquire(blocking=False):
-        return JSONResponse({
-            "translation": "",
-            "source_lang": "",
-            "original_text": "",
-            "latency_ms": 0,
-            "skipped": True,
-        })
-
     try:
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(None, _process_audio, pcm_bytes)
@@ -141,8 +129,6 @@ async def translate(request: Request) -> JSONResponse:
             {"error": str(exc)},
             status_code=500,
         )
-    finally:
-        _translate_lock.release()
 
 
 # ── Parent watchdog ───────────────────────────────────────────────────
