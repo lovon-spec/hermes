@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1e1e2e"/>
+      <stop offset="100%" stop-color="#11111b"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#89b4fa"/>
+      <stop offset="100%" stop-color="#74c7ec"/>
+    </linearGradient>
+    <linearGradient id="subtitleGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#a6e3a1" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#94e2d5" stop-opacity="0.4"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.4" r="0.35">
+      <stop offset="0%" stop-color="#89b4fa" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#89b4fa" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Rounded square background -->
+  <rect x="16" y="16" width="480" height="480" rx="96" fill="url(#bg)"/>
+  <rect x="18" y="18" width="476" height="476" rx="94" fill="none" stroke="#313244" stroke-width="1.5"/>
+
+  <!-- Subtle glow behind the H -->
+  <ellipse cx="256" cy="240" rx="140" ry="160" fill="url(#glow)"/>
+
+  <!-- The "H" — elegant serif, centered -->
+  <!-- Left vertical stroke -->
+  <rect x="152" y="135" width="12" height="250" rx="2" fill="url(#accent)"/>
+  <!-- Right vertical stroke -->
+  <rect x="348" y="135" width="12" height="250" rx="2" fill="url(#accent)"/>
+  <!-- Horizontal crossbar -->
+  <rect x="164" y="250" width="184" height="10" rx="2" fill="url(#accent)"/>
+  <!-- Top left serif -->
+  <rect x="136" y="130" width="44" height="9" rx="3" fill="url(#accent)"/>
+  <!-- Top right serif -->
+  <rect x="332" y="130" width="44" height="9" rx="3" fill="url(#accent)"/>
+  <!-- Bottom left serif -->
+  <rect x="136" y="381" width="44" height="9" rx="3" fill="url(#accent)"/>
+  <!-- Bottom right serif -->
+  <rect x="332" y="381" width="44" height="9" rx="3" fill="url(#accent)"/>
+
+  <!-- Speech bubble arcs — emanating right, suggesting translation output -->
+  <path d="M 380 210 Q 395 256, 380 302" fill="none" stroke="url(#subtitleGrad)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 398 190 Q 420 256, 398 322" fill="none" stroke="url(#subtitleGrad)" stroke-width="2.5" stroke-linecap="round" opacity="0.7"/>
+  <path d="M 416 175 Q 444 256, 416 337" fill="none" stroke="url(#subtitleGrad)" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+
+  <!-- Subtitle bar — floating text line at bottom, representing the overlay -->
+  <rect x="120" y="420" width="272" height="28" rx="14" fill="#313244" opacity="0.6"/>
+  <rect x="140" y="430" width="60" height="8" rx="4" fill="#89b4fa" opacity="0.5"/>
+  <rect x="210" y="430" width="40" height="8" rx="4" fill="#b4befe" opacity="0.4"/>
+  <rect x="260" y="430" width="80" height="8" rx="4" fill="#cba6f7" opacity="0.35"/>
+  <rect x="350" y="430" width="24" height="8" rx="4" fill="#89b4fa" opacity="0.3"/>
+
+  <!-- Small language dots — source and target -->
+  <circle cx="116" cy="434" r="5" fill="#f38ba8" opacity="0.5"/>
+  <circle cx="396" cy="434" r="5" fill="#a6e3a1" opacity="0.5"/>
+</svg>
