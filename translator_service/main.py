@@ -83,41 +83,41 @@ async def reset() -> JSONResponse:
 
 # -- Translate -------------------------------------------------------------
 def _process_audio(pcm_bytes: bytes, language: Optional[str]) -> dict:
-    """Run the streaming transcription + optional NLLB translation."""
+    """Run per-chunk transcription with VAD + initial_prompt, then NLLB."""
     t0 = time.perf_counter()
 
     state = stream_engine.get_state()
     result = state.process_chunk(pcm_bytes, language=language)
 
-    confirmed = result["confirmed"]
-    tentative = result["tentative"]
+    text = result["text"]
     source_lang = result["source_lang"]
-    is_final = result["is_final"]
 
-    # Use the best available text: confirmed if we have it, otherwise tentative
-    # LocalAgreement is conservative, so tentative often has the real content
-    display_text = confirmed if confirmed.strip() else tentative
+    if not text or not text.strip():
+        return {
+            "translation": "",
+            "original_text": "",
+            "tentative": "",
+            "source_lang": source_lang,
+            "latency_ms": int((time.perf_counter() - t0) * 1000),
+            "is_final": False,
+            "skipped": True,
+        }
 
     # Translate through NLLB if non-English
-    translation = ""
-    original_text = display_text
+    translation = text
     skipped = True
-    if display_text and display_text.strip():
-        if source_lang == "en":
-            translation = display_text
-        else:
-            nllb_result = nllb_engine.translate(display_text, source_lang=source_lang)
-            translation = nllb_result["translation"]
-            skipped = False
+    if source_lang != "en":
+        nllb_result = nllb_engine.translate(text, source_lang=source_lang)
+        translation = nllb_result["translation"]
+        skipped = False
 
-    latency = int((time.perf_counter() - t0) * 1000)
     return {
         "translation": translation,
-        "original_text": original_text,
-        "tentative": tentative if confirmed.strip() else "",
+        "original_text": text,
+        "tentative": "",
         "source_lang": source_lang,
-        "latency_ms": latency,
-        "is_final": is_final,
+        "latency_ms": int((time.perf_counter() - t0) * 1000),
+        "is_final": True,
         "skipped": skipped,
     }
 
