@@ -14,15 +14,16 @@ from typing import Optional
 
 import numpy as np
 
-# Use the mlx-community repo which ships weights in MLX format
-# (weights.safetensors + native config keys).  The openai/ repo uses
-# PyTorch format which mlx_whisper cannot load directly.
 _MODEL_REPO = "mlx-community/whisper-large-v3-turbo"
 
-# Lazy singleton -- the first call to _get_module() triggers the import,
-# which in turn downloads / caches the model weights via mlx-whisper.
 _lock = threading.Lock()
 _mlx_whisper = None
+
+# Serialize all MLX/Metal GPU operations to prevent concurrent command buffer access
+_inference_lock = threading.Lock()
+
+# Silence threshold: RMS below this means no meaningful audio
+_SILENCE_RMS_THRESHOLD = 0.01
 
 
 def _get_module():
@@ -31,7 +32,7 @@ def _get_module():
     if _mlx_whisper is None:
         with _lock:
             if _mlx_whisper is None:
-                import mlx_whisper  # noqa: F811 -- heavy import, done once
+                import mlx_whisper
                 _mlx_whisper = mlx_whisper
     return _mlx_whisper
 
@@ -43,23 +44,26 @@ def _pcm_bytes_to_float32(raw: bytes) -> np.ndarray:
     return samples
 
 
+def _is_silence(audio: np.ndarray) -> bool:
+    """Return True if the audio is effectively silent."""
+    if len(audio) == 0:
+        return True
+    rms = np.sqrt(np.mean(audio ** 2))
+    return rms < _SILENCE_RMS_THRESHOLD
+
+
 def transcribe(pcm_bytes: bytes, *, language: Optional[str] = None) -> dict:
     """
     Transcribe raw PCM audio bytes.
 
-    Parameters
-    ----------
-    pcm_bytes : bytes
-        16 kHz, mono, 16-bit signed little-endian PCM.
-    language : str or None
-        ISO 639-1 code (e.g. "ka" for Georgian).  Pass None for auto-detection.
-
-    Returns
-    -------
-    dict  {"text": str, "language": str}
+    Returns dict {"text": str, "language": str}
     """
-    mlx_w = _get_module()
     audio = _pcm_bytes_to_float32(pcm_bytes)
+
+    if _is_silence(audio):
+        return {"text": "", "language": language or ""}
+
+    mlx_w = _get_module()
 
     kwargs = {
         "path_or_hf_repo": _MODEL_REPO,
@@ -67,7 +71,9 @@ def transcribe(pcm_bytes: bytes, *, language: Optional[str] = None) -> dict:
     if language is not None:
         kwargs["language"] = language
 
-    result = mlx_w.transcribe(audio, **kwargs)
+    # Serialize Metal GPU access — concurrent MLX calls crash the command buffer
+    with _inference_lock:
+        result = mlx_w.transcribe(audio, **kwargs)
 
     text = (result.get("text") or "").strip()
     detected_lang = result.get("language", language or "")
@@ -80,6 +86,7 @@ def transcribe(pcm_bytes: bytes, *, language: Optional[str] = None) -> dict:
 
 def warmup() -> None:
     """Pre-load the model by transcribing 0.5 s of silence."""
-    silence = np.zeros(8000, dtype=np.float32)  # 0.5 s at 16 kHz
+    silence = np.zeros(8000, dtype=np.float32)
     mlx_w = _get_module()
-    mlx_w.transcribe(silence, path_or_hf_repo=_MODEL_REPO)
+    with _inference_lock:
+        mlx_w.transcribe(silence, path_or_hf_repo=_MODEL_REPO)
