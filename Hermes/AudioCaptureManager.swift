@@ -23,7 +23,7 @@ class AudioCaptureManager: NSObject {
 
     // MARK: - Configuration
     private let targetSampleRate: Double = 16000
-    private let chunkDuration: Double = 3.0       // seconds per chunk
+    private let chunkDuration: Double = 5.0       // seconds per chunk — more context for Georgian
     private let translationURL = URL(string: "http://localhost:5005/translate")!
 
     /// Language code sent to the translation service via X-Language header.
@@ -35,6 +35,7 @@ class AudioCaptureManager: NSObject {
     private var pcmBuffer = Data()
     private let bufferQueue = DispatchQueue(label: "com.hermes.translator.audio")
     private(set) var isCapturing = false
+    private var lastTranslation: String = ""
 
     /// Called on the main queue with (translation, originalText?, tentativeText?)
     var onTranslation: ((String, String?, String?) -> Void)?
@@ -268,6 +269,12 @@ class AudioCaptureManager: NSObject {
                     if let latency = json["latency_ms"] as? Int {
                         self?.log("Latency: \(latency)ms")
                     }
+                    // Dedup: skip if same as last translation
+                    if translation == self?.lastTranslation {
+                        self?.log("Skipping duplicate: \(translation)")
+                        return
+                    }
+                    self?.lastTranslation = translation
                     self?.log("Showing subtitle: \(translation)" +
                               (tentative != nil ? " [tentative: \(tentative!)]" : ""))
                     DispatchQueue.main.async {
