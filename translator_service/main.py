@@ -111,6 +111,77 @@ def _google_stt(pcm_bytes: bytes, language: str = "ka-GE") -> str:
         logger.warning("Google STT exception: %s", e)
         return ""
 
+# -- Gemini API key --------------------------------------------------------
+_GEMINI_KEY = ""
+for env_name in ["GEMINI_API_KEY"]:
+    _GEMINI_KEY = os.environ.get(env_name, "")
+    if _GEMINI_KEY:
+        break
+if not _GEMINI_KEY:
+    _env_path = os.path.expanduser("~/.env")
+    if os.path.isfile(_env_path):
+        with open(_env_path) as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("GEMINI_API_KEY="):
+                    _GEMINI_KEY = line.split("=", 1)[1]
+                    break
+
+
+def _gemini_translate_audio(pcm_bytes: bytes) -> tuple:
+    """Send audio to Gemini Flash, get Georgian transcription + English translation.
+    Returns (translation, original_text) or ("", "") on failure."""
+    if not _GEMINI_KEY:
+        return "", ""
+    import base64
+    import wave
+    import io
+
+    # Convert PCM to WAV in memory (Gemini needs a proper audio format)
+    wav_buf = io.BytesIO()
+    with wave.open(wav_buf, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(16000)
+        wf.writeframes(pcm_bytes)
+    wav_bytes = wav_buf.getvalue()
+    audio_b64 = base64.b64encode(wav_bytes).decode()
+
+    try:
+        resp = http_requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={_GEMINI_KEY}",
+            json={
+                "contents": [{
+                    "parts": [
+                        {"inline_data": {"mime_type": "audio/wav", "data": audio_b64}},
+                        {"text": "Listen to this audio. If there is Georgian speech, transcribe it in Georgian script and translate it to English. Reply with ONLY two lines:\nLine 1: Georgian transcription\nLine 2: English translation\nIf there is no speech or you cannot understand it, reply with just: EMPTY"},
+                    ]
+                }],
+                "generationConfig": {"temperature": 0.1, "maxOutputTokens": 256},
+            },
+            timeout=15,
+        )
+        logger.warning("Gemini HTTP %d", resp.status_code)
+        if resp.status_code != 200:
+            logger.warning("Gemini error: %s", resp.text[:200])
+            return "", ""
+
+        data = resp.json()
+        text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+        logger.warning("Gemini response: %s", text[:150])
+
+        if text == "EMPTY" or not text:
+            return "", ""
+
+        lines = text.split("\n", 1)
+        if len(lines) >= 2:
+            return lines[1].strip(), lines[0].strip()  # (translation, original)
+        return lines[0].strip(), ""  # just translation
+    except Exception as e:
+        logger.warning("Gemini error: %s", e)
+        return "", ""
+
+
 # -- App state -------------------------------------------------------------
 app = FastAPI(title="Hermes Translator Service")
 
@@ -149,6 +220,21 @@ def _process_audio(pcm_bytes: bytes, language: Optional[str]) -> dict:
     """Route audio through local or cloud pipeline based on language."""
     t0 = time.perf_counter()
     import re
+
+    # Gemini pipeline: audio → Georgian transcription + English translation in one call
+    if language == "ka-gemini":
+        translation, original = _gemini_translate_audio(pcm_bytes)
+        if not translation:
+            return _empty_result("ka", t0)
+        return {
+            "translation": translation,
+            "original_text": original,
+            "tentative": "",
+            "source_lang": "ka",
+            "latency_ms": int((time.perf_counter() - t0) * 1000),
+            "is_final": True,
+            "skipped": False,
+        }
 
     # Cloud pipeline: Google STT + Google Translate
     if language == "ka-cloud":

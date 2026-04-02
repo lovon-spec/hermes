@@ -20,7 +20,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Language selection
 
-    private var selectedLanguage = "ka-cloud"
+    private var selectedLanguage = "ka-gemini"
     private var languageMenuItems: [NSMenuItem] = []
 
     // MARK: - State
@@ -104,8 +104,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let languageSubmenu = NSMenu(title: "Language")
 
         let languages: [(title: String, code: String)] = [
-            ("Georgian (\u{10E5}\u{10D0}\u{10E0}\u{10D7}\u{10E3}\u{10DA}\u{10D8})", "ka"),
-            ("Georgian (Cloud)", "ka-cloud"),
+            ("Georgian (Gemini)", "ka-gemini"),
+            ("Georgian (Google Cloud)", "ka-cloud"),
+            ("Georgian (Local)", "ka"),
             ("English", "en"),
             ("Auto-detect", "auto")
         ]
