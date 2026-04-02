@@ -46,9 +46,12 @@ def _warmup() -> None:
         whisper_engine.warmup()
         logger.info("Whisper engine ready.")
 
-        logger.info("Warming up Georgian NeMo engine...")
-        georgian_engine.warmup()
-        logger.info("Georgian NeMo engine ready.")
+        logger.warning("Warming up Georgian NeMo engine...")
+        try:
+            georgian_engine.warmup()
+            logger.warning("Georgian NeMo engine ready.")
+        except Exception as e:
+            logger.warning("Georgian NeMo engine failed: %s", e)
 
         logger.info("Warming up NLLB engine...")
         nllb_engine.warmup()
