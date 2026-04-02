@@ -235,6 +235,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             print("[AppDelegate] Translation service is ready")
             self.isServiceReady = true
             self.updateMenuForState()
+            // Auto-start translation when service is ready
+            self.startTranslation()
         }
     }
 
