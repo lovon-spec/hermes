@@ -23,6 +23,7 @@ from fastapi.responses import JSONResponse
 import whisper_engine
 import nllb_engine
 import stream_engine
+import georgian_engine
 
 # -- Logging ---------------------------------------------------------------
 logger = logging.getLogger("hermes.translator")
@@ -44,6 +45,10 @@ def _warmup() -> None:
         logger.info("Warming up Whisper engine...")
         whisper_engine.warmup()
         logger.info("Whisper engine ready.")
+
+        logger.info("Warming up Georgian NeMo engine...")
+        georgian_engine.warmup()
+        logger.info("Georgian NeMo engine ready.")
 
         logger.info("Warming up NLLB engine...")
         nllb_engine.warmup()

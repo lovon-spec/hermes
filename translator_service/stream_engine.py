@@ -1,6 +1,9 @@
 """
 Simple per-chunk transcription with initial_prompt context.
 No VAD, no rolling buffer, no LocalAgreement.
+
+Routes Georgian audio to the NeMo FastConformer engine and all
+other languages through Whisper (mlx-whisper).
 """
 
 from __future__ import annotations
@@ -9,6 +12,7 @@ import threading
 from typing import Optional
 
 import whisper_engine
+import georgian_engine
 
 _PROMPT_TAIL_CHARS = 200
 
@@ -25,14 +29,19 @@ class StreamState:
             self._detected_lang = ""
 
     def process_chunk(self, pcm_bytes: bytes, language: Optional[str] = None) -> dict:
-        with self._lock:
-            prompt = self._last_transcript[-_PROMPT_TAIL_CHARS:] if self._last_transcript else None
+        # Route Georgian to the dedicated NeMo engine
+        if language == "ka":
+            stt = georgian_engine.transcribe(pcm_bytes)
+        else:
+            # Use Whisper with initial_prompt context for all other languages
+            with self._lock:
+                prompt = self._last_transcript[-_PROMPT_TAIL_CHARS:] if self._last_transcript else None
 
-        stt = whisper_engine.transcribe(
-            pcm_bytes=pcm_bytes,
-            language=language,
-            initial_prompt=prompt,
-        )
+            stt = whisper_engine.transcribe(
+                pcm_bytes=pcm_bytes,
+                language=language,
+                initial_prompt=prompt,
+            )
 
         text = stt["text"]
         detected_lang = stt["language"]
