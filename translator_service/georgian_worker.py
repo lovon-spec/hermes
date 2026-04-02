@@ -34,8 +34,12 @@ def main():
     model = nemo_asr.models.EncDecHybridRNNTCTCBPEModel.from_pretrained(
         model_name="nvidia/stt_ka_fastconformer_hybrid_transducer_ctc_large_streaming_80ms_pc"
     )
-    model.to("cpu").eval()
+    # Use MPS (Metal GPU) if available, else CPU
+    device = "mps" if torch.backends.mps.is_available() else "cpu"
+    model.to(device).eval()
     model.change_decoding_strategy(decoder_type="ctc")
+    sys.stderr.write(f"Georgian worker: using {device}\n")
+    sys.stderr.flush()
 
     # Warmup
     silence_path = _write_wav(np.zeros(8000, dtype=np.int16))

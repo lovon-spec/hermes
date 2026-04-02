@@ -47,15 +47,25 @@ def _ensure_worker():
         logger.warning("NeMo venv not found at %s", _VENV_DIR)
         return False
 
-    logger.info("Starting Georgian worker subprocess...")
+    logger.info("Starting Georgian worker subprocess: %s", python)
+    env = os.environ.copy()
+    env["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
     _process = subprocess.Popen(
         [python, _WORKER_SCRIPT],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        env=env,
     )
 
-    # Wait for "ready" signal
+    # Log worker stderr in background
+    import threading
+    def _drain_stderr():
+        for line in _process.stderr:
+            logger.info("[Georgian worker] %s", line.decode().rstrip())
+    threading.Thread(target=_drain_stderr, daemon=True).start()
+
+    # Wait for "ready" signal (model download + load can take a while)
     try:
         line = _process.stdout.readline().decode().strip()
         status = json.loads(line)
