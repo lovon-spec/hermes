@@ -97,7 +97,10 @@ def _process_audio(pcm_bytes: bytes, language: Optional[str]) -> dict:
     text = result["text"]
     source_lang = result["source_lang"]
 
-    if not text or not text.strip():
+    # Strip punctuation-only transcriptions (NeMo outputs "." for silence)
+    import re
+    cleaned = re.sub(r'[^\w]', '', text or '')
+    if not cleaned:
         return {
             "translation": "",
             "original_text": "",
