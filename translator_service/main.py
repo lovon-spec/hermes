@@ -97,10 +97,11 @@ def _process_audio(pcm_bytes: bytes, language: Optional[str]) -> dict:
     text = result["text"]
     source_lang = result["source_lang"]
 
-    # Strip punctuation-only transcriptions (NeMo outputs "." for silence)
+    # Skip empty, punctuation-only, or very short transcriptions
+    # NeMo outputs ".", "ა.", "ი." for silence — NLLB hallucinates on these
     import re
     cleaned = re.sub(r'[^\w]', '', text or '')
-    if not cleaned:
+    if len(cleaned) < 3:
         return {
             "translation": "",
             "original_text": "",
