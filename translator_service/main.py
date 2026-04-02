@@ -85,12 +85,13 @@ def _google_stt(pcm_bytes: bytes, language: str = "ka-GE") -> str:
             },
             timeout=10,
         )
+        data = resp.json()
+        logger.warning("Google STT HTTP %d: %s", resp.status_code, str(data)[:200])
         if resp.status_code == 200:
-            results = resp.json().get("results", [])
+            results = data.get("results", [])
             if results:
                 return results[0]["alternatives"][0]["transcript"]
             return ""
-        logger.warning("Google STT HTTP %d: %s", resp.status_code, resp.text[:100])
         return ""
     except Exception as e:
         logger.warning("Google STT error: %s", e)
@@ -165,7 +166,10 @@ def _process_audio(pcm_bytes: bytes, language: Optional[str]) -> dict:
 
     # Cloud pipeline: Google STT + Google Translate
     if language == "ka-cloud":
-        logger.warning("Cloud pipeline: sending %d bytes to Google STT", len(pcm_bytes))
+        import numpy as np
+        samples = np.frombuffer(pcm_bytes, dtype=np.int16)
+        rms = float(np.sqrt(np.mean(samples.astype(np.float64) ** 2)))
+        logger.warning("Cloud pipeline: sending %d bytes to Google STT (RMS=%.0f)", len(pcm_bytes), rms)
         text = _google_stt(pcm_bytes, language="ka-GE")
         logger.warning("Cloud STT returned: %s", (text or "")[:80])
         if not text or not text.strip():
