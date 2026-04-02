@@ -85,16 +85,19 @@ def _google_stt(pcm_bytes: bytes, language: str = "ka-GE") -> str:
             },
             timeout=10,
         )
+        logger.warning("Google STT raw HTTP %d, body len=%d", resp.status_code, len(resp.text))
         data = resp.json()
-        logger.warning("Google STT HTTP %d: %s", resp.status_code, str(data)[:200])
         if resp.status_code == 200:
             results = data.get("results", [])
             if results:
-                return results[0]["alternatives"][0]["transcript"]
+                transcript = results[0]["alternatives"][0]["transcript"]
+                logger.warning("Google STT transcript: %s", transcript[:100])
+                return transcript
             return ""
+        logger.warning("Google STT error response: %s", str(data)[:200])
         return ""
     except Exception as e:
-        logger.warning("Google STT error: %s", e)
+        logger.warning("Google STT exception: %s", e)
         return ""
 
 # -- App state -------------------------------------------------------------
