@@ -40,3 +40,4 @@ translator_service/models/
 project.yml
 hermes-app
 Hermes.app/
+.venv-nemo/
