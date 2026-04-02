@@ -13,10 +13,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import threading
 import time
 from typing import Optional
 
+import requests as http_requests
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
@@ -27,6 +29,38 @@ import georgian_engine
 
 # -- Logging ---------------------------------------------------------------
 logger = logging.getLogger("hermes.translator")
+
+# -- Google Translate -------------------------------------------------------
+_GOOGLE_TRANSLATE_KEY = os.environ.get("GOOGLE_TRANSLATE", "")
+if not _GOOGLE_TRANSLATE_KEY:
+    # Try loading from ~/.env
+    _env_path = os.path.expanduser("~/.env")
+    if os.path.isfile(_env_path):
+        with open(_env_path) as f:
+            for line in f:
+                if line.startswith("GOOGLE_TRANSLATE="):
+                    _GOOGLE_TRANSLATE_KEY = line.strip().split("=", 1)[1]
+                    break
+
+
+def _google_translate(text: str, source_lang: str = "ka", target_lang: str = "en") -> str:
+    """Translate text using Google Cloud Translation API v2."""
+    if not _GOOGLE_TRANSLATE_KEY:
+        return ""
+    try:
+        resp = http_requests.post(
+            "https://translation.googleapis.com/language/translate/v2",
+            params={"key": _GOOGLE_TRANSLATE_KEY},
+            json={"q": text, "source": source_lang, "target": target_lang, "format": "text"},
+            timeout=5,
+        )
+        if resp.status_code == 200:
+            return resp.json()["data"]["translations"][0]["translatedText"]
+        logger.warning("Google Translate HTTP %d: %s", resp.status_code, resp.text[:100])
+        return ""
+    except Exception as e:
+        logger.warning("Google Translate error: %s", e)
+        return ""
 
 # -- App state -------------------------------------------------------------
 _ready = False
@@ -115,20 +149,16 @@ def _process_audio(pcm_bytes: bytes, language: Optional[str]) -> dict:
             "skipped": True,
         }
 
-    # Translate through NLLB if non-English
+    # Translate if non-English
     translation = text
     skipped = True
     if source_lang != "en":
-        nllb_result = nllb_engine.translate(text, source_lang=source_lang)
-        translation = nllb_result["translation"]
+        translation = _google_translate(text, source_lang)
+        if not translation:
+            # Fallback to NLLB if Google Translate fails
+            nllb_result = nllb_engine.translate(text, source_lang=source_lang)
+            translation = nllb_result["translation"]
         skipped = False
-
-        # Detect NLLB hallucination: output much longer than input is suspicious
-        # NLLB trained on Bible translations, so it hallucinates religious content
-        if len(translation) > len(text) * 3 and len(text) < 30:
-            logger.warning("NLLB hallucination detected, suppressing: %s -> %s", text, translation[:60])
-            translation = ""
-            skipped = True
 
     return {
         "translation": translation,

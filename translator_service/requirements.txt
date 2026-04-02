@@ -8,3 +8,4 @@ torch
 torchaudio
 onnxruntime
 nemo_toolkit[asr]
+requests
