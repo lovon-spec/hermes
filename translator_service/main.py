@@ -98,7 +98,6 @@ def _google_stt(pcm_bytes: bytes, language: str = "ka-GE") -> str:
         return ""
 
 # -- App state -------------------------------------------------------------
-_ready = False
 app = FastAPI(title="Hermes Translator Service")
 
 # Minimum audio body size: 0.5 s at 16 kHz, 16-bit mono = 16000 bytes/s * 0.5
