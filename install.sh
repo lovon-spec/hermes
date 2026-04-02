@@ -27,6 +27,7 @@ echo "Using Python: $PYTHON"
 
 # 3. Install Python dependencies
 echo "Installing Python dependencies..."
+"$PYTHON" -m pip install -q Cython
 "$PYTHON" -m pip install -q -r "$PROJECT_DIR/translator_service/requirements.txt"
 
 # 4. Detect deployment target
