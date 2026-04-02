@@ -26,6 +26,10 @@ logger = logging.getLogger("hermes.georgian")
 _MODEL_NAME = "nvidia/stt_ka_fastconformer_hybrid_transducer_ctc_large_streaming_80ms_pc"
 _SAMPLE_RATE = 16000
 
+# Force PyTorch to use all CPU cores — must be set before torch import
+os.environ["OMP_NUM_THREADS"] = str(os.cpu_count() or 8)
+os.environ["MKL_NUM_THREADS"] = str(os.cpu_count() or 8)
+
 _lock = threading.Lock()
 _model = None
 
@@ -58,6 +62,7 @@ def _get_model():
                     model_name=_MODEL_NAME,
                 )
                 model = model.to("cpu")
+                model = model.half()  # float16 — halves memory bandwidth
                 model.eval()
 
                 # Disable decoding strategies that might try to use CUDA
