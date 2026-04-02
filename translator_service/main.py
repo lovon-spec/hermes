@@ -62,6 +62,40 @@ def _google_translate(text: str, source_lang: str = "ka", target_lang: str = "en
         logger.warning("Google Translate error: %s", e)
         return ""
 
+
+def _google_stt(pcm_bytes: bytes, language: str = "ka-GE") -> str:
+    """Transcribe audio using Google Cloud Speech-to-Text v1."""
+    if not _GOOGLE_TRANSLATE_KEY:
+        return ""
+    import base64
+    audio_b64 = base64.b64encode(pcm_bytes).decode()
+    try:
+        resp = http_requests.post(
+            "https://speech.googleapis.com/v1/speech:recognize",
+            headers={"X-goog-api-key": _GOOGLE_TRANSLATE_KEY},
+            json={
+                "config": {
+                    "encoding": "LINEAR16",
+                    "sampleRateHertz": 16000,
+                    "languageCode": language,
+                    "model": "default",
+                    "enableAutomaticPunctuation": True,
+                },
+                "audio": {"content": audio_b64},
+            },
+            timeout=10,
+        )
+        if resp.status_code == 200:
+            results = resp.json().get("results", [])
+            if results:
+                return results[0]["alternatives"][0]["transcript"]
+            return ""
+        logger.warning("Google STT HTTP %d: %s", resp.status_code, resp.text[:100])
+        return ""
+    except Exception as e:
+        logger.warning("Google STT error: %s", e)
+        return ""
+
 # -- App state -------------------------------------------------------------
 _ready = False
 app = FastAPI(title="Hermes Translator Service")
@@ -125,29 +159,36 @@ async def reset() -> JSONResponse:
 
 # -- Translate -------------------------------------------------------------
 def _process_audio(pcm_bytes: bytes, language: Optional[str]) -> dict:
-    """Run per-chunk transcription with VAD + initial_prompt, then NLLB."""
+    """Route audio through local or cloud pipeline based on language."""
     t0 = time.perf_counter()
+    import re
 
+    # Cloud pipeline: Google STT + Google Translate
+    if language == "ka-cloud":
+        text = _google_stt(pcm_bytes, language="ka-GE")
+        if not text or not text.strip():
+            return _empty_result("ka", t0)
+        translation = _google_translate(text, source_lang="ka")
+        return {
+            "translation": translation or text,
+            "original_text": text,
+            "tentative": "",
+            "source_lang": "ka",
+            "latency_ms": int((time.perf_counter() - t0) * 1000),
+            "is_final": True,
+            "skipped": not translation,
+        }
+
+    # Local pipeline: NeMo/Whisper + Google Translate/NLLB
     state = stream_engine.get_state()
     result = state.process_chunk(pcm_bytes, language=language)
 
     text = result["text"]
     source_lang = result["source_lang"]
 
-    # Skip empty, punctuation-only, or very short transcriptions
-    # NeMo outputs ".", "ა.", "ი." for silence — NLLB hallucinates on these
-    import re
     cleaned = re.sub(r'[^\w]', '', text or '')
     if len(cleaned) < 5:
-        return {
-            "translation": "",
-            "original_text": "",
-            "tentative": "",
-            "source_lang": source_lang,
-            "latency_ms": int((time.perf_counter() - t0) * 1000),
-            "is_final": False,
-            "skipped": True,
-        }
+        return _empty_result(source_lang, t0)
 
     # Translate if non-English
     translation = text
@@ -155,7 +196,6 @@ def _process_audio(pcm_bytes: bytes, language: Optional[str]) -> dict:
     if source_lang != "en":
         translation = _google_translate(text, source_lang)
         if not translation:
-            # Fallback to NLLB if Google Translate fails
             nllb_result = nllb_engine.translate(text, source_lang=source_lang)
             translation = nllb_result["translation"]
         skipped = False
@@ -168,6 +208,18 @@ def _process_audio(pcm_bytes: bytes, language: Optional[str]) -> dict:
         "latency_ms": int((time.perf_counter() - t0) * 1000),
         "is_final": True,
         "skipped": skipped,
+    }
+
+
+def _empty_result(source_lang: str, t0: float) -> dict:
+    return {
+        "translation": "",
+        "original_text": "",
+        "tentative": "",
+        "source_lang": source_lang,
+        "latency_ms": int((time.perf_counter() - t0) * 1000),
+        "is_final": False,
+        "skipped": True,
     }
 
 

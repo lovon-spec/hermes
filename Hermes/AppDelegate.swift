@@ -105,6 +105,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let languages: [(title: String, code: String)] = [
             ("Georgian (\u{10E5}\u{10D0}\u{10E0}\u{10D7}\u{10E3}\u{10DA}\u{10D8})", "ka"),
+            ("Georgian (Cloud)", "ka-cloud"),
             ("English", "en"),
             ("Auto-detect", "auto")
         ]
