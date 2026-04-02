@@ -154,7 +154,7 @@ def _gemini_translate_audio(pcm_bytes: bytes) -> tuple:
                 "contents": [{
                     "parts": [
                         {"inline_data": {"mime_type": "audio/wav", "data": audio_b64}},
-                        {"text": "Listen to this audio. If there is Georgian speech, transcribe it in Georgian script and translate it to English. Reply with ONLY two lines:\nLine 1: Georgian transcription\nLine 2: English translation\nIf there is no speech or you cannot understand it, reply with just: EMPTY"},
+                        {"text": "Transcribe this Georgian audio and translate to English. Format:\nGE: [Georgian text]\nEN: [English translation]\nIf no speech, reply: EMPTY"},
                     ]
                 }],
                 "generationConfig": {"temperature": 0.1, "maxOutputTokens": 256},
@@ -173,10 +173,25 @@ def _gemini_translate_audio(pcm_bytes: bytes) -> tuple:
         if text == "EMPTY" or not text:
             return "", ""
 
-        lines = text.split("\n", 1)
-        if len(lines) >= 2:
-            return lines[1].strip(), lines[0].strip()  # (translation, original)
-        return lines[0].strip(), ""  # just translation
+        # Parse GE:/EN: format, or fall back to line splitting
+        original = ""
+        translation = ""
+        for line in text.split("\n"):
+            line = line.strip()
+            if line.startswith("GE:"):
+                original = line[3:].strip()
+            elif line.startswith("EN:"):
+                translation = line[3:].strip()
+
+        # Fallback: if no EN: line, use Google Translate on the Georgian text
+        if not translation and original:
+            translation = _google_translate(original, source_lang="ka")
+        # Fallback: if no format at all, treat whole response as Georgian and translate
+        if not translation and not original and text != "EMPTY":
+            original = text
+            translation = _google_translate(text, source_lang="ka")
+
+        return translation, original
     except Exception as e:
         logger.warning("Gemini error: %s", e)
         return "", ""
