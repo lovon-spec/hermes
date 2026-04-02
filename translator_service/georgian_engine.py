@@ -45,6 +45,9 @@ def _get_model():
                 os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 
                 import torch
+                # Use all available CPU cores for inference
+                torch.set_num_threads(os.cpu_count() or 8)
+                torch.set_num_interop_threads(4)
                 # Suppress noisy NeMo/PL logs during loading
                 logging.getLogger("pytorch_lightning").setLevel(logging.WARNING)
                 logging.getLogger("nemo_logger").setLevel(logging.WARNING)
