@@ -104,7 +104,7 @@ def _process_audio(pcm_bytes: bytes, language: Optional[str]) -> dict:
     # NeMo outputs ".", "ა.", "ი." for silence — NLLB hallucinates on these
     import re
     cleaned = re.sub(r'[^\w]', '', text or '')
-    if len(cleaned) < 3:
+    if len(cleaned) < 5:
         return {
             "translation": "",
             "original_text": "",
@@ -122,6 +122,13 @@ def _process_audio(pcm_bytes: bytes, language: Optional[str]) -> dict:
         nllb_result = nllb_engine.translate(text, source_lang=source_lang)
         translation = nllb_result["translation"]
         skipped = False
+
+        # Detect NLLB hallucination: output much longer than input is suspicious
+        # NLLB trained on Bible translations, so it hallucinates religious content
+        if len(translation) > len(text) * 3 and len(text) < 30:
+            logger.warning("NLLB hallucination detected, suppressing: %s -> %s", text, translation[:60])
+            translation = ""
+            skipped = True
 
     return {
         "translation": translation,
