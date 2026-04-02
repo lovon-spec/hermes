@@ -65,13 +65,25 @@ def _ensure_worker():
             logger.info("[Georgian worker] %s", line.decode().rstrip())
     threading.Thread(target=_drain_stderr, daemon=True).start()
 
-    # Wait for "ready" signal (model download + load can take a while)
+    # Wait for "ready" signal — skip any non-JSON lines NeMo might print to stdout
     try:
-        line = _process.stdout.readline().decode().strip()
-        status = json.loads(line)
-        if status.get("status") == "ready":
-            logger.info("Georgian worker ready (pid %d)", _process.pid)
-            return True
+        import time
+        deadline = time.time() + 120  # 2 minute timeout for model download + load
+        while time.time() < deadline:
+            line = _process.stdout.readline().decode().strip()
+            if not line:
+                if _process.poll() is not None:
+                    logger.error("Georgian worker exited during startup")
+                    return False
+                continue
+            try:
+                status = json.loads(line)
+                if status.get("status") == "ready":
+                    logger.info("Georgian worker ready (pid %d)", _process.pid)
+                    return True
+            except json.JSONDecodeError:
+                logger.info("[Georgian worker stdout] %s", line)
+                continue
     except Exception as e:
         logger.error("Georgian worker failed to start: %s", e)
 
