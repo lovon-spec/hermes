@@ -23,7 +23,7 @@ class AudioCaptureManager: NSObject {
 
     // MARK: - Configuration
     private let targetSampleRate: Double = 16000
-    private let chunkDuration: Double = 5.0       // seconds per chunk — more context for Georgian
+    private let chunkDuration: Double = 10.0      // seconds per chunk — more context for fast Georgian speech
     private let translationURL = URL(string: "http://localhost:5005/translate")!
 
     /// Language code sent to the translation service via X-Language header.
