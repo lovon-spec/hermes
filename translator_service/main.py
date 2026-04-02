@@ -154,10 +154,10 @@ def _gemini_translate_audio(pcm_bytes: bytes) -> tuple:
                 "contents": [{
                     "parts": [
                         {"inline_data": {"mime_type": "audio/wav", "data": audio_b64}},
-                        {"text": "Transcribe this Georgian audio and translate to English. Format:\nGE: [Georgian text]\nEN: [English translation]\nIf no speech, reply: EMPTY"},
+                        {"text": "Transcribe ALL Georgian speech in this entire audio clip completely, word for word. Then translate the full transcription to English. Do not skip or summarize any part. Format:\nGE: [complete Georgian transcription]\nEN: [complete English translation]\nIf no speech detected, reply only: EMPTY"},
                     ]
                 }],
-                "generationConfig": {"temperature": 0.1, "maxOutputTokens": 256},
+                "generationConfig": {"temperature": 0.1, "maxOutputTokens": 1024},
             },
             timeout=15,
         )
