@@ -20,7 +20,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Language selection
 
-    private var selectedLanguage = "ka"
+    private var selectedLanguage = "ka-cloud"
     private var languageMenuItems: [NSMenuItem] = []
 
     // MARK: - State
