@@ -106,40 +106,13 @@ _MIN_AUDIO_BYTES = 8000
 
 
 # -- Startup ---------------------------------------------------------------
-def _warmup() -> None:
-    """Load all models in a background thread so uvicorn starts accepting
-    connections immediately (health returns 'loading' in the meantime)."""
-    global _ready
-    try:
-        logger.info("Warming up Whisper engine...")
-        whisper_engine.warmup()
-        logger.info("Whisper engine ready.")
-
-        logger.warning("Warming up Georgian NeMo engine...")
-        try:
-            georgian_engine.warmup()
-            logger.warning("Georgian NeMo engine ready.")
-        except Exception as e:
-            logger.warning("Georgian NeMo engine failed: %s", e)
-
-        logger.info("Warming up NLLB engine...")
-        nllb_engine.warmup()
-        logger.info("NLLB engine ready.")
-
-        logger.info("Warming up Silero VAD...")
-        stream_engine.warmup_vad()
-        logger.info("Silero VAD ready.")
-
-        _ready = True
-        logger.info("All models loaded -- service is ready.")
-    except Exception:
-        logger.exception("Model warmup failed")
+# Service is ready immediately — local models load lazily on first use
+_ready = True
 
 
 @app.on_event("startup")
 async def on_startup() -> None:
-    t = threading.Thread(target=_warmup, daemon=True)
-    t.start()
+    pass  # no eager warmup — models load on demand
 
 
 # -- Health ----------------------------------------------------------------
