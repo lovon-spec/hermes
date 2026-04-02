@@ -165,10 +165,13 @@ def _process_audio(pcm_bytes: bytes, language: Optional[str]) -> dict:
 
     # Cloud pipeline: Google STT + Google Translate
     if language == "ka-cloud":
+        logger.warning("Cloud pipeline: sending %d bytes to Google STT", len(pcm_bytes))
         text = _google_stt(pcm_bytes, language="ka-GE")
+        logger.warning("Cloud STT returned: %s", (text or "")[:80])
         if not text or not text.strip():
             return _empty_result("ka", t0)
         translation = _google_translate(text, source_lang="ka")
+        logger.warning("Cloud Translate returned: %s", (translation or "")[:80])
         return {
             "translation": translation or text,
             "original_text": text,
@@ -236,7 +239,7 @@ async def translate(request: Request) -> JSONResponse:
     language: Optional[str] = None if lang_header == "auto" else lang_header
 
     pcm_bytes = await request.body()
-    logger.info("Received %d bytes (lang=%s)", len(pcm_bytes), lang_header)
+    logger.warning("Received %d bytes (lang=%s)", len(pcm_bytes), lang_header)
 
     if len(pcm_bytes) < _MIN_AUDIO_BYTES:
         return JSONResponse({
