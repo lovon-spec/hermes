@@ -149,7 +149,7 @@ def _gemini_translate_audio(pcm_bytes: bytes) -> tuple:
 
     try:
         resp = http_requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_GEMINI_KEY}",
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-live-preview:generateContent?key={_GEMINI_KEY}",
             json={
                 "contents": [{
                     "parts": [
