@@ -36,6 +36,7 @@ class AudioCaptureManager: NSObject {
     private let bufferQueue = DispatchQueue(label: "com.hermes.translator.audio")
     private(set) var isCapturing = false
     private var lastTranslation: String = ""
+    private var requestInFlight = false
 
     /// Called on the main queue with (translation, originalText?, tentativeText?)
     var onTranslation: ((String, String?, String?) -> Void)?
@@ -222,13 +223,21 @@ class AudioCaptureManager: NSObject {
     private func flushChunkIfReady() {
         let chunkBytes = Int(targetSampleRate * chunkDuration) * 2   // 2 bytes per sample
 
-        while pcmBuffer.count >= chunkBytes {
-            let chunk = Data(pcmBuffer.prefix(chunkBytes))
+        // Skip if still waiting for previous response — prevents queue buildup
+        guard !requestInFlight else {
+            // Drain buffer to stay current (keep only latest chunk worth of data)
+            if pcmBuffer.count > chunkBytes {
+                pcmBuffer = pcmBuffer.suffix(chunkBytes)
+            }
+            return
+        }
 
-            // Consume the chunk from the front of the buffer
+        if pcmBuffer.count >= chunkBytes {
+            let chunk = Data(pcmBuffer.prefix(chunkBytes))
             pcmBuffer = pcmBuffer.subdata(in: chunkBytes..<pcmBuffer.count)
 
             log("Sending chunk: \(chunk.count) bytes (\(Double(chunk.count) / 32000.0)s audio)")
+            requestInFlight = true
             onChunkReady?(chunk)
             sendChunkToTranslationService(chunk)
         }
@@ -246,6 +255,7 @@ class AudioCaptureManager: NSObject {
         request.timeoutInterval = 30
 
         URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            self?.bufferQueue.async { self?.requestInFlight = false }
             if let error = error {
                 self?.log("Translation request FAILED: \(error.localizedDescription)")
                 return
