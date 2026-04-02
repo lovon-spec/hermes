@@ -72,7 +72,7 @@ def _google_stt(pcm_bytes: bytes, language: str = "ka-GE") -> str:
     try:
         resp = http_requests.post(
             "https://speech.googleapis.com/v1/speech:recognize",
-            headers={"X-goog-api-key": _GOOGLE_TRANSLATE_KEY},
+            params={"key": _GOOGLE_TRANSLATE_KEY},
             json={
                 "config": {
                     "encoding": "LINEAR16",
