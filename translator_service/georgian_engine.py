@@ -83,6 +83,7 @@ def transcribe(pcm_bytes: bytes) -> dict:
     if not pcm_bytes or len(pcm_bytes) < 1600:
         return {"text": "", "language": "ka"}
 
+    global _process
     with _inference_lock:
         with _lock:
             if not _ensure_worker():
@@ -104,9 +105,7 @@ def transcribe(pcm_bytes: bytes) -> dict:
             return json.loads(line)
         except (BrokenPipeError, OSError) as e:
             logger.error("Georgian worker pipe error: %s", e)
-            # Worker died — clear it so next call restarts
             with _lock:
-                global _process
                 _process = None
             return {"text": "", "language": "ka"}
 
