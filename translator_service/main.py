@@ -31,15 +31,26 @@ import georgian_engine
 logger = logging.getLogger("hermes.translator")
 
 # -- Google Translate -------------------------------------------------------
-_GOOGLE_TRANSLATE_KEY = os.environ.get("GOOGLE_TRANSLATE", "")
+_GOOGLE_TRANSLATE_KEY = ""
+# Check env vars first
+for env_name in ["GOOGLE_TRANSLATE", "TRANSLATE_API_KEY"]:
+    _GOOGLE_TRANSLATE_KEY = os.environ.get(env_name, "")
+    if _GOOGLE_TRANSLATE_KEY:
+        break
+# Fall back to ~/.env file
 if not _GOOGLE_TRANSLATE_KEY:
-    # Try loading from ~/.env
     _env_path = os.path.expanduser("~/.env")
     if os.path.isfile(_env_path):
         with open(_env_path) as f:
             for line in f:
-                if line.startswith("GOOGLE_TRANSLATE="):
-                    _GOOGLE_TRANSLATE_KEY = line.strip().split("=", 1)[1]
+                line = line.strip()
+                if line.startswith("#") or "=" not in line:
+                    continue
+                for key_name in ["GOOGLE_TRANSLATE", "TRANSLATE_API_KEY"]:
+                    if line.startswith(key_name + "="):
+                        _GOOGLE_TRANSLATE_KEY = line.split("=", 1)[1]
+                        break
+                if _GOOGLE_TRANSLATE_KEY:
                     break
 
 
